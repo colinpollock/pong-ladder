@@ -1,0 +1,11 @@
+
+api_service_port: 5001
+debug: True
+
+db_file: "ladder.db"
+
+ratings:
+  starter_rating: 1200
+  k_value_21: 15
+  k_value_11: 10
+
