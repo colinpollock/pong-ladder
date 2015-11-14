@@ -26,8 +26,7 @@ class LadderBot(irc.IRCClient):
         """Identify the command, talk to ladder service, and return a list of 
         messages to be sent back to the channel.
         """
-
-        print 'COMMAND:', command
+        _log_info('COMMAND: %s' % command)
         help_pat = re.compile(r'help|commands', re.IGNORECASE)
         player_pat = re.compile(r'add\s+player\s+(?P<name>\w+)')
         ladder_pat = re.compile(r'ladder|ratings|rankings')
@@ -45,17 +44,18 @@ class LadderBot(irc.IRCClient):
             (?P<loser_score>\d+)
         """, re.VERBOSE)
 
+        # TODO: handle challenges (all open, my open)
+        # TODO: handle 'show my games'
+
         if help_pat.match(command):
             return self.get_help()
 
         if ladder_pat.match(command):
             return self.get_ladder()
 
-
         m = player_pat.match(command)
         if m:
             return self.add_player(m.groupdict()['name'])
-
         
         m = game_pat.match(command)
         if m:
@@ -64,13 +64,14 @@ class LadderBot(irc.IRCClient):
                                  data['winner_score'], 
                                  data['loser_score'])
 
-        return ['Command not recognized.']
+        return ['Command not recognized! Type "pongbot help" for more info.']
 
     def add_player(self, player_name):
         """Add a new player"""
 
         response = self._post('/players', {'name': player_name})
         if response.ok:
+            # TODO: send  initial rating back
             return ['Added player "%s"' % player_name]
         else:
             #TODO: pass the exception message through
@@ -89,34 +90,30 @@ class LadderBot(irc.IRCClient):
 
         response = self._post('/games', data)
         if response.ok:
+            # TODO: send the point differences back
             return ['Added game']
         else:
             # TODO: pass the exception message through
             return ['Failed to add game']
 
-
     def get_ladder(self):
         """Return the players ordered by rating."""
         response = self._get('/players')
         if not response.ok:
-            return 'ERROR: contact cpollock'
+            # TODO: log this, and handle error better
+            return ['ERROR: contact cpollock']
+            # TODO: get maintainer out of config
 
         def _make_line(player):
             return '[%d] %s %d-%d (%d)' % (
                 player['rank'],
                 player['name'].encode('ascii'),
-
-                # TODO: I need to pass these through from the service, but I'm
-                # going to wait to do that until I get the REST interface in
-                # better order.
-                47, 53,
-#               player['num_wins'],
-#               player['num_losses'],
-
+                player['num_wins'],
+                player['num_losses'],
                 player['rating']
             )
 
-        return map(_make_line, response.json()['players'])
+        return map(_make_line, response.json())
 
     def get_help(self):
         """Display help information about using the bot and available commands.
@@ -153,7 +150,8 @@ class LadderBot(irc.IRCClient):
 
     def privmsg(self, user, channel, message):
         """Respond to a message in the channel if the bot is mentioned."""
-        _log_info('privMsg from %s in channel %s: "%s"' % (user, channel, message))
+        _log_info('privMsg from %s in channel %s: "%s"' % \
+            (user, channel, message))
         pat = re.compile(r"""
             \s*
             (?P<nick>%s|%s)
@@ -186,7 +184,6 @@ class LadderBot(irc.IRCClient):
         
     def _get(self, endpoint):
         """Make a GET request to the specified endpoint and return response."""
-        print 'URL IS:', self._api_url + endpoint
         return requests.get(self._api_url + endpoint)
 
 
@@ -197,7 +194,7 @@ class LadderBotFactory(protocol.ClientFactory):
         self.channel = channel
         self.nickname = nickname
 
-        self.api_url = 'http://%s:%d/api' % (service_host, service_port)
+        self.api_url = 'http://%s:%d' % (service_host, service_port)
 
 
     def clientConnectionLost(self, connector, reason):

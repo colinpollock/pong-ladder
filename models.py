@@ -6,13 +6,15 @@ from db import db
 
 
 class Player(Model):
+    """TODO: docstring"""
+    # TODO: use the name as the PK?
     name = CharField(max_length=30, unique=True, help_text="Player's username")
+
     rating = IntegerField(help_text='ELO rating')
     time_added = DateTimeField()
 
     class Meta:
         database = db
-
 
     @property
     def won_games(self):
@@ -30,17 +32,21 @@ class Player(Model):
     def num_losses(self):
         return self.lost_games.count()
 
-
     def __unicode__(self):
         return 'Player(%s, %d, %s)' % (self.name, self.rating, self.time_added)
 
 
 class Game(Model):
+    """TODO: docstring"""
     winner = ForeignKeyField(Player, related_name='won_games')
     loser = ForeignKeyField(Player, related_name='lost_games')
     winner_score = IntegerField()
     loser_score = IntegerField()
     time_added = DateTimeField()
+
+    @property
+    def time_added_str(self):
+        return str(self.time_added)
 
     class Meta:
         database = db
@@ -79,4 +85,5 @@ class Challenge(Model):
 
     @property
     def is_completed(self):
+        """TODO: docstring"""
         return self.game is not None

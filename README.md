@@ -11,6 +11,8 @@ connect to it over HTTP.
   * Django generated a backref for the related_name, so I could
     reference the games from the player
 
+* Use name as pk
+* Put `to_entity` munging code in model classes
 * Write tests
 * Use restful API flask. flask.ext.restful
   * Validation of args
@@ -21,7 +23,7 @@ connect to it over HTTP.
   * Log IRC connection errors
   * Log service communication errors
 
-* Support 
+* Standard config reader?
 
 * PEP8 comments
 * order imports correctly
@@ -29,7 +31,9 @@ connect to it over HTTP.
 
 
 # Example Usage #
+
 ## Setting up ##
+* Dependencies
 * Running the service
 
 * Running the bot
