@@ -31,10 +31,7 @@ class PlayerListResource(Resource):
 
     def post(self):
         """TODO: docstring"""
-        # TODO: use build_parser
-        parser = reqparse.RequestParser()
-        parser.add_argument('name', type=str)
-        args = parser.parse_args()
+        args = build_parser(name=str).parse_args()
 
         # TODO: verify player doesn't exist already
 
