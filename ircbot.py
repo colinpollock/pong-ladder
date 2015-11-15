@@ -15,7 +15,7 @@ from sys import stderr
 
 import requests
 from twisted.words.protocols import irc
-from twisted.internet import protocol, reactor
+from twisted.internet import protocol, reactor, ssl
 
 
 class LadderBot(irc.IRCClient):
@@ -220,7 +220,16 @@ def main(args):
         args.service_port,
     )
 
-    reactor.connectTCP(args.irc_host, args.irc_port, bot_factory)
+    if args.use_ssl:
+        reactor.connectSSL(
+            args.irc_host,
+            args.irc_port,
+            bot_factory,
+            ssl.ClientContextFactory()
+        )
+
+    else:
+        reactor.connectTCP(args.irc_host, args.irc_port, bot_factory)
 
     try:
         reactor.run()
@@ -233,6 +242,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--irc-host', required=True)
     parser.add_argument('--irc-port', type=int, required=True)
+    parser.add_argument('--use-ssl', action='store_true', default=False)
     parser.add_argument(
         '--channel',
         required=True,
