@@ -12,13 +12,8 @@ import elo
 from util import config
 
 
-
 app = Flask(__name__)
 api = Api(app)
-
-################################################################################
-# Helpers
-# End Helpers
 
 
 class PlayerListResource(Resource):
@@ -151,17 +146,6 @@ class ChallengeListResource(Resource):
 
         query = query.order_by(Challenge.time_added.desc())
         challenges = [model_to_dict(challenge) for challenge in query]
-
-
-
-
-
-
-
-
-
-
-
 
     def post(self):
         """TODO: docstring
