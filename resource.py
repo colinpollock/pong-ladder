@@ -11,6 +11,7 @@ from util import config
 import elo
 from util import config
 
+from db import db
 
 app = Flask(__name__)
 api = Api(app)
@@ -250,6 +251,15 @@ def _get_player_by_name(player_name):
         return Player.select().where(Player.name==player_name).get()
     except Exception as e: # TODO: why not a more specific exception?
         return None
+
+@app.teardown_request
+def _db_close():
+    if not db.is_closed():
+        db.close()
+
+@app.before_request
+def _db_connect():
+    db.connect()
 
 
 if __name__ == '__main__':
