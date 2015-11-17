@@ -4,7 +4,6 @@ TODO docstring
 
 from __future__ import division
 
-from util import config
 
 
 def elo_update(winner_rating, loser_rating, to_11=True):
@@ -31,6 +30,10 @@ def compute_k_value(to_11):
     See https://en.wikipedia.org/wiki/Elo_rating_system#Most_accurate_K-factor.
     """
     if to_11:
+        return 10
+        # meow: get this from configs somehow
         return config['ratings']['k_value_11']
     else:
+        return 15
+        # meow: get this from configs somehow
         return config['ratings']['k_value_21']

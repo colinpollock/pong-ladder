@@ -2,19 +2,20 @@
 
 from datetime import datetime
 
-from flask import Flask, jsonify, request
-from flask.ext.restful import reqparse, abort, Api, Resource
-from playhouse.shortcuts import model_to_dict
+from flask.ext.restful import reqparse, Resource
+# meow
+from playhouse.shortcuts import model_to_dict # use the sqlalchemy version of this
+
+from sqlalchemy import and_, or_
 
 from models import Challenge, Game, Player
-from util import config
+
 import elo
-from util import config
 
-from db import db
+from models import db
+#from util import config
 
-app = Flask(__name__)
-api = Api(app)
+from ipdb import set_trace
 
 
 class PlayerListResource(Resource):
@@ -22,7 +23,8 @@ class PlayerListResource(Resource):
 
     def get(self):
         """TODO: docstring"""
-        query = Player.select().order_by(Player.rating.desc())
+        set_trace()
+        query = Player.query.order_by(Player.rating.desc())
 
         return [
             _convert_player_model(model, idx)
@@ -36,9 +38,13 @@ class PlayerListResource(Resource):
 
         # TODO: verify player doesn't exist already
 
-        player = Player.create(
+        # meow: insertion
+        player = Player(
             name=args.name,
-            rating=config['ratings']['starter_rating'],
+            rating=1200,
+            # meow: get from config somehow
+
+#            rating=config['ratings']['starter_rating'],
             time_added=datetime.now()
         )
 
@@ -52,10 +58,8 @@ class PlayerResource(Resource):
 
     def get(self, name):
         """Return the player with the specified name."""
-        # TODO: handle missing players correctly (4xx)
-        player_model = Player.get(name=name)
+        player_model = Player.get_or_404(name=name)
         return _convert_player_model(player_model), 200
-
 
 
 class GameListResource(Resource):
@@ -67,7 +71,7 @@ class GameListResource(Resource):
         parser.add_argument('count', type=int, default=10)
         args = parser.parse_args()
 
-        query = Game.select().order_by(Game.time_added.desc()).limit(args.count)
+        query = Game.query.order_by(Game.time_added.desc()).limit(args.count)
         return [
             _convert_game_model(model)
             for model in query
@@ -115,6 +119,7 @@ class GameListResource(Resource):
         new_winner_rating, new_loser_rating = \
             _update_ratings(winner, loser, is_game_to_11)
 
+        # meow insertion
         game = Game.create(
             winner=winner.id,
             loser=loser.id,
@@ -138,25 +143,19 @@ class ChallengeListResource(Resource):
         TODO: allow for challenges for a particular person to power "show me
         my challenges".
         """
-        query = _open_challenge_selector().order_by(Challenge.time_added(desc()))
+        query = _open_challenge_selector().order_by(Challenge.time_added.desc())
         challenges = [model_to_dict(challenge) for challenge in query]
 
 
         query = query.order_by(Challenge.time_added.desc())
         challenges = [model_to_dict(challenge) for challenge in query]
+        return 'challenges_todo', 200
 
     def post(self):
         """TODO: docstring
         
         Adds a new challenge.
         """
-
-
-api.add_resource(PlayerListResource, '/players')
-api.add_resource(PlayerResource, '/players/<string:name>')
-api.add_resource(GameListResource, '/games')
-api.add_resource(ChallengeListResource, '/challenges')
-
 
 ################################################################################
 # Helpers
@@ -173,10 +172,17 @@ def _update_challenges_with_new_game(game):
     winner_id = game.winner.id
     loser_id = game.loser.id
 
-    challenge_query = _open_challenge_selector().where(
-        (Challenge.challenger==winner_id & Challenge.challenger==loser_id)
-        |
-        (Challenge.challenger==loser_id & Challenge.challenger==winner_id)
+    challenge_query = _open_challenge_selector().filter(
+        or_(
+            and_(
+                Challenge.challenger==winner_id,
+                Challenge.challenged==loser_id,
+            ),
+            and_(
+                Challenge.challenger==loser_id,
+                Challenge.challenged==winner_id,
+            )
+        )
     )
 
     for challenge in challenge_query:
@@ -243,7 +249,7 @@ def _inspect_scores(winner_score, loser_score):
 
 def _open_challenge_selector():
     """Hepler method for returning `Challenge`s that are still open."""
-    return Challenge.select().where(Challenge.game >> None)
+    return Challenge.query.filter(Challenge.game != None)
 
 
 def _get_player_by_name(player_name):
@@ -252,15 +258,3 @@ def _get_player_by_name(player_name):
     except Exception as e: # TODO: why not a more specific exception?
         return None
 
-@app.teardown_request
-def _db_close():
-    if not db.is_closed():
-        db.close()
-
-@app.before_request
-def _db_connect():
-    db.connect()
-
-
-if __name__ == '__main__':
-    app.run(debug=config['debug'], port=config['api_service_port'])

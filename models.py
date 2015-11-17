@@ -1,20 +1,19 @@
 
-from peewee import Model
-from peewee import CharField, ForeignKeyField, DateTimeField, BooleanField, IntegerField
+#from peewee import Model
+#from peewee import CharField, ForeignKeyField, DateTimeField, BooleanField, IntegerField
 
-from db import db
+from flask.ext.sqlalchemy import SQLAlchemy
+
+db = SQLAlchemy()
 
 
-class Player(Model):
+class Player(db.Model):
     """TODO: docstring"""
-    # TODO: use the name as the PK?
-    name = CharField(max_length=30, unique=True, help_text="Player's username")
-
-    rating = IntegerField(help_text='ELO rating')
-    time_added = DateTimeField()
-
-    class Meta:
-        database = db
+    __tablename__ = 'players'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column('name', db.String(30))
+    rating = db.Column('rating', db.Integer)
+    time_added = db.Column('time_added', db.DateTime)
 
     @property
     def won_games(self):
@@ -32,51 +31,72 @@ class Player(Model):
     def num_losses(self):
         return self.lost_games.count()
 
-    def __unicode__(self):
+    def __repr__(self):
         return 'Player(%s, %d, %s)' % (self.name, self.rating, self.time_added)
 
 
-class Game(Model):
+class Game(db.Model):
     """TODO: docstring"""
-    winner = ForeignKeyField(Player, related_name='won_games')
-    loser = ForeignKeyField(Player, related_name='lost_games')
-    winner_score = IntegerField()
-    loser_score = IntegerField()
-    time_added = DateTimeField()
+    __tablename__ = 'games'
+    id = db.Column(db.Integer, primary_key=True)
+
+    winner_id = db.Column(db.Integer, db.ForeignKey('player.id'))
+    winner = db.relationship(
+        'Player',
+        backref=db.backref('won_games', lazy='dynamic')
+    )
+
+    loser_id = db.Column(db.Integer, db.ForeignKey('player.id'))
+    loser = db.relationship(
+        'Player',
+        backref=db.backref('lost_games', lazy='dynamic')
+    )
+
+    winner_score = db.Column('winner_score', db.Integer)
+    loser_score = db.Column('loser_score', db.Integer)
+
+    time_added = db.Column('time_added', db.DateTime)
 
     @property
     def time_added_str(self):
         return str(self.time_added)
 
-    class Meta:
-        database = db
-
-    def __unicode__(self):
+    def __repr__(self):
         return ('Game(%s beat %s %d-%d on %s)' % 
             (self.winner, self.loser, self.winner_score, self.loser_score,
              self.time_added))
 
-
-class Challenge(Model):
+class Challenge(db.Model):
     """A challenge issued by one player to another.
 
     Note that the `game` field references a Game if this challenge has been
     played and is None otherwise.
     """
-    challenger = ForeignKeyField(Player, related_name='challenges_submitted')
-    challenged = ForeignKeyField(Player, related_name='challenges_accepted')
+    __tablename__ = 'challenges'
 
-    game = ForeignKeyField(
-        Game,
-        null=True, 
-        help_text='References the completed game'
+    id = db.Column(db.Integer, primary_key=True)
+
+    challenger_id = db.Column(db.Integer, db.ForeignKey('player.id'))
+    challenger = db.relationship(
+        'Player',
+        backref=db.backref('challenges_submitted')
     )
-    time_added = DateTimeField()
 
-    class Meta:
-        database = db
+    challenged_id = db.Column(db.Integer, db.ForeignKey('player.id'))
+    challenged = db.relationship(
+        'Player',
+        backref=db.backref('challenges_accepted')
+    )
 
-    def __unicode__(self):
+    time_added = db.Column('time_added', db.DateTime)
+
+    game_id = db.Column(db.Integer, db.ForeignKey('game.id'))
+    game = db.relationship(
+        'Game',
+        backref=db.backref('challenges')
+    )
+
+    def __repr__(self):
         if self.is_completed:
             return 'Challenge completed: ', self.game
         else:

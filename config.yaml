@@ -1,11 +1,30 @@
 
-api_service_port: 5001
-debug: True
+COMMON: &common
+  DEBUG: False
+  TESTING: False
+  PORT: 4753
+  RATINGS:
+    STARTER_RATING: 1200
+    K_VALUE_21: 15
+    K_VALUE_11: 10
 
-db_file: "ladder.db"
+  SQLALCHEMY_TRACK_MODIFICATIONS: True
 
-ratings:
-  starter_rating: 1200
-  k_value_21: 15
-  k_value_11: 10
+
+DEVELOPMENT: &development
+  <<: *common
+  DEBUG: True
+  DATABASE_FILE: "ladder.db"
+
+PRODUCTION: &production
+  <<: *common
+  DATABASE_FILE: "production_db"
+
+TESTING: &testing
+  DATABASE_FILE = ":memory"
+
+db_file: 'ladder.db'
+
+
+#api_service_port: 5001
 
