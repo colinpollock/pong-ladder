@@ -10,21 +10,13 @@ COMMON: &common
 
   SQLALCHEMY_TRACK_MODIFICATIONS: True
 
-
 DEVELOPMENT: &development
   <<: *common
   DEBUG: True
-  DATABASE_FILE: "ladder.db"
 
 PRODUCTION: &production
   <<: *common
-  DATABASE_FILE: "production_db"
+  SQLALCHEMY_DATABASE_URI: 'sqlite:///prod.db'
 
 TESTING: &testing
-  DATABASE_FILE = ":memory"
-
-db_file: 'ladder.db'
-
-
-#api_service_port: 5001
-
+  SQLALCHEMY_DATABASE_URI: 'sqlite://'

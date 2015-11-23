@@ -10,13 +10,10 @@ from resource import (PlayerListResource, PlayerResource, GameListResource,
 from models import db
 
 
-
-
 def create_app():
     app = Flask(__name__)
     env = Environments(app)
     env.from_yaml(os.path.join(os.getcwd(), 'config.yaml'))
-
 
     api = Api(app)
     api.add_resource(PlayerListResource, '/players')
@@ -27,7 +24,6 @@ def create_app():
     db.init_app(app)
 
     return app
-
 
 
 if __name__ == '__main__':
