@@ -5,13 +5,22 @@ from datetime import datetime
 from models import db, Player, Game, Challenge
 from app import create_app
 
+from test_common import BaseFlaskTest
 
-context = create_app().app_context()
-context.push()
-db.create_all()
 
-class TestWithData(object):
+class BaseTestWithData(BaseFlaskTest):
     """Base test class that provides test data."""
+
+    @classmethod
+    def setup_class(cls):
+        cls.app_context = create_app().app_context()
+        cls.app_context.push()
+        db.create_all()
+
+    @classmethod
+    def teardown_class(cls):
+        cls.app_context.pop()
+
     def setup(self):
         self.kumanan = Player(name='kumanan', rating=1300, time_created=now())
         self.colin = Player(name='colin', rating=1100, time_created=now())
@@ -97,7 +106,7 @@ class TestWithData(object):
         Game.query.delete()
         Challenge.query.delete()
 
-class TestPlayer(TestWithData):
+class TestPlayer(BaseTestWithData):
     def test_count(self):
         assert Player.query.count() == 4
 
@@ -159,7 +168,7 @@ class TestPlayer(TestWithData):
         assert self.ayush.num_challenges == 2
 
 
-class TestGame(TestWithData):
+class TestGame(BaseTestWithData):
     def test_game_count(self):
         assert Game.query.count() == 5
 
@@ -171,7 +180,7 @@ class TestGame(TestWithData):
         assert self.game2.challenge is None
 
 
-class TestChallenge(TestWithData):
+class TestChallenge(BaseTestWithData):
     def test_is_completed(self):
         assert self.challenge1.is_completed is True
         assert self.challenge2.is_completed is False
