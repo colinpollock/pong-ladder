@@ -2,47 +2,167 @@
 
 from datetime import datetime
 
-from flask import Flask, jsonify, request
-from flask.ext.restful import reqparse, abort, Api, Resource
-from playhouse.shortcuts import model_to_dict
+from flask.ext.restful import Resource, abort
+from flask.ext.restful.reqparse import RequestParser, Argument
 
-from models import Challenge, Game, Player
-from util import config
+from sqlalchemy import and_, or_
+from sqlalchemy.exc import SQLAlchemyError
+from webargs import fields, validate, ValidationError
+from webargs.flaskparser import use_args, use_kwargs, parser
+
+
+
+import schemas
 import elo
-from util import config
+import util
+from models import Challenge, Game, Player
+from models import db
 
-from db import db
+from ipdb import set_trace #meow
 
-app = Flask(__name__)
-api = Api(app)
+#TODO: get this from the config
+DEFAULT_INITIAL_RATING = 1200
+
+
+def _validate_player_name_not_used(player_name):
+    if _player_exists(player_name):
+        raise ValidationError('Player "%s" already exists' % player_name)
+    
+def _validate_player_exists(player_name):
+    if not _player_exists(player_name):
+        raise ValidationError('Player "%s" does not exist' % player_name)
+
+def _player_exists(player_name):
+    return Player.query.filter_by(name=player_name).count() > 0
+
+def _validate_scores(winner_score, loser_score):
+    error = ValidationError('Invalid score: winner score must be 21 or 11 '
+                            'and loser score must be at least one lower.')
+
+    ws = winner_score
+    ls = loser_score
+
+    if ws == 21:
+        if ls < 0 or ls > 20:
+            raise error
+    elif ws == 11:
+        if ls < 0 or ls > 10:
+            raise error
+    else:
+        raise error
+
+def _validate_player_uniqueness(player1, player2):
+    if player1 == player2:
+        message = 'Two players must be unique, but both are "%s"' % player1
+        raise ValidationError(message)
+
+def _validate_game(game):
+    # TODO: raise ALL exceptions rather than the first
+    _validate_scores(game['winner_score'], game['loser_score'])
+    _validate_player_uniqueness(game['winner'], game['loser'])
+
+def _validate_no_open_challenges(challenger_name, challenged_name):
+    challenger = _get_player_by_name(challenger_name)
+    challenged = _get_player_by_name(challenged_name)
+
+    query = _query_open_challenges_for_players(challenger, challenged)
+    if query.count() > 0:
+        message = 'There is an open challenge between the two players'
+        raise ValidationError(message)
+
+def _query_open_challenges_for_players(player1, player2):
+    """Make a query that finds open challenges between the two players."""
+    player_filter = or_(
+        and_(
+            Challenge.challenger==player1,
+            Challenge.challenged==player2,
+        ),
+        and_(
+            Challenge.challenger==player2,
+            Challenge.challenged==player1,
+        )
+    )
+    open_filter = Challenge.game == None
+
+    return Challenge.query.filter(and_(open_filter, player_filter))
+
+def _validate_challenge(challenge):
+    # TODO: raise ALL exceptions rather than the first
+    _validate_player_uniqueness(
+        challenge['challenger_name'],
+        challenge['challenged_name']
+    )
+    _validate_no_open_challenges(
+        challenge['challenger_name'],
+        challenge['challenged_name']
+    )
 
 
 class PlayerListResource(Resource):
-    """TODO: docstring"""
 
     def get(self):
-        """TODO: docstring"""
-        query = Player.select().order_by(Player.rating.desc())
+        """Return all of the Players.
 
-        return [
-            _convert_player_model(model, idx)
-            for idx, model
-            in enumerate(query, start=1)
-        ]
+        The players are ordered by:
+        1) Rating descending.
+        2) Number of games played descending.
+        3) Join date ascending.
+        """
+        query = Player.query.all()
+        marshalled = schemas.players_schema.dump(query)
 
-    def post(self):
-        """TODO: docstring"""
-        args = build_parser(name=str).parse_args()
+        if marshalled.errors:
+            return marshalled.errors, 500
 
-        # TODO: verify player doesn't exist already
-
-        player = Player.create(
-            name=args.name,
-            rating=config['ratings']['starter_rating'],
-            time_added=datetime.now()
+        players = sorted(
+            marshalled.data,
+            key = lambda player: (
+                -player['rating'],
+                -(player['num_wins'] + player['num_losses']),
+                util.parse_datetime(player['time_created'])
+            )
         )
 
-        return player.id, 201
+        return players, 200
+
+    @use_kwargs({
+        'name': fields.Str(
+            required=True,
+            validate=_validate_player_name_not_used
+        ),
+        'rating': fields.Int(
+            missing=DEFAULT_INITIAL_RATING,
+            validate=validate.Range(min=1)
+        ),
+        'time_created': fields.DateTime(
+            missing=util.now_as_iso_string
+         )
+    })
+    def post(self, name, rating, time_created):
+        """Add a new Player.
+
+        Args:
+            name - The player's name.
+            rating - The player's rating. Defaults to DEFAULT_INITIAL_RATING.
+            time_created - When the player was created. Defaults to now.
+
+        Returns:
+            The created player's name, which is a unique key.
+
+        Side effects:
+            Adds a Player to the database.
+        """
+        player = Player(
+            name=name,
+            rating=rating,
+            time_created=time_created
+        )
+
+        db.session.add(player)
+        db.session.commit()
+
+        return player.name, 201
+
 
 class PlayerResource(Resource):
     """TODO: docstring
@@ -52,35 +172,62 @@ class PlayerResource(Resource):
 
     def get(self, name):
         """Return the player with the specified name."""
-        # TODO: handle missing players correctly (4xx)
-        player_model = Player.get(name=name)
-        return _convert_player_model(player_model), 200
+        player = Player.query.filter_by(name=name).first_or_404()
+        marshalled = schemas.player_schema.dump(player)
 
+        if marshalled.errors:
+            return marshalled.errors, 500
+        else:
+            return marshalled.data, 200
 
 
 class GameListResource(Resource):
-    """TODO: docstring"""
-    def get(self):
-        """TODO: docstring"""
-        # TODO: use build_parser
-        parser = reqparse.RequestParser()
-        parser.add_argument('count', type=int, default=10)
-        args = parser.parse_args()
+    """GET for listing all games, POST for adding a game."""
 
-        query = Game.select().order_by(Game.time_added.desc()).limit(args.count)
-        return [
-            _convert_game_model(model)
-            for model in query
-        ]
+    @use_kwargs({'count': fields.Int(missing=10)})
+    def get(self, count):
+        query = Game.query.order_by(Game.time_created.desc()).limit(count)
+        marshalled = schemas.games_schema.dump(query)
 
-    def post(self):
+        if marshalled.errors:
+            return marshalled.errors, 500
+        else:
+            return marshalled.data, 200
+
+
+    @use_kwargs({
+        'winner': fields.Str(
+            required=True,
+            validate=_validate_player_exists
+
+        ),
+        'loser': fields.Str(
+            required=True,
+            validate=_validate_player_exists
+        ),
+        'winner_score': fields.Int(required=True),
+        'loser_score': fields.Int(required=True),
+        'time_created': fields.DateTime(
+            missing=util.now_as_iso_string
+         )
+    },
+    validate=_validate_game)
+    def post(
+        self,
+        winner,
+        loser,
+        winner_score,
+        loser_score,
+        time_created
+    ):
         """Add a new Game.
 
         Args:
-            winner: winner playing's name.
+            winner: winner player's name.
             loser: losing player's name.
             winner_score: winning player's score.
             loser_score: losing player's score.
+            time_created: when the game was created. Defaults to NOW.
 
         Returns:
             A pair (game_id, response_code) when successful.
@@ -89,48 +236,42 @@ class GameListResource(Resource):
             Adds a new game to the database.
             Updates each player's rating in the database.
             Associates the new game with an existing challenge if appropriate.
-
-        Raises:
-            TODO: exceptions for different errors
-            * player missing
-            * winner==loser
-            * invalid scores
         """
-        args = _build_parser(
-            winner=str,
-            loser=str,
-            winner_score=int,
-            loser_score=int
-        ).parse_args()
+        winner = _get_player_by_name(winner)
+        loser = _get_player_by_name(loser)
 
-        winner = _get_player_by_name(args.winner)
-        loser = _get_player_by_name(args.loser)
-
-        if winner is None or loser is None:
-            # TODO: return correct error response code here
-            raise Exception('At least one player does not exist')
-
-        is_game_to_11 = _inspect_scores(args.winner_score, args.loser_score)
-
+        is_game_to_11 = winner_score == 11
         new_winner_rating, new_loser_rating = \
-            _update_ratings(winner, loser, is_game_to_11)
+            elo.elo_update(winner.rating, loser.rating, is_game_to_11)
 
-        game = Game.create(
-            winner=winner.id,
-            loser=loser.id,
-            winner_score=args.winner_score,
-            loser_score=args.loser_score,
-            time_added=datetime.now()
+        winner.rating = new_winner_rating
+        loser.rating = new_loser_rating
+        db.session.add_all([winner, loser])
+        db.session.commit()
+
+        game = Game(
+            winner=winner,
+            loser=loser,
+            winner_score=winner_score,
+            loser_score=loser_score,
+            time_created=time_created
         )
 
-        _update_challenges_with_new_game(game)
+        db.session.add(game)
+        db.session.commit()
+
+        challenges = _query_open_challenges_for_players(winner, loser)
+        for challenge in challenges:
+            challenge.game_id = game.id
+            db.session.add(challenge)
+        db.session.commit()
 
         return game.id, 201
 
 class ChallengeListResource(Resource):
-    """TODO: docstring"""
 
-    def get(self):
+    @use_kwargs({'include_completed': fields.Bool(missing=False)})
+    def get(self, include_completed):
         """Return all open challenges.
         
         Challenges are ordered oldest to newest.
@@ -138,129 +279,76 @@ class ChallengeListResource(Resource):
         TODO: allow for challenges for a particular person to power "show me
         my challenges".
         """
-        query = _open_challenge_selector().order_by(Challenge.time_added(desc()))
-        challenges = [model_to_dict(challenge) for challenge in query]
 
+        if include_completed:
+            query = Challenge.query
+        else:
+            query = Challenge.query.filter(Challenge.game == None)
 
-        query = query.order_by(Challenge.time_added.desc())
-        challenges = [model_to_dict(challenge) for challenge in query]
+        marshalled = schemas.challenges_schema.dump(query)
+        if marshalled.errors:
+            return marshalled.errors, 500
 
-    def post(self):
-        """TODO: docstring
-        
-        Adds a new challenge.
+        challenges = marshalled.data
+        return challenges, 200
+
+    @use_kwargs({
+        'challenger_name': fields.Str(
+            required=True,
+            validate=_validate_player_exists
+        ),
+        'challenged_name': fields.Str(
+            required=True,
+            validate=_validate_player_exists
+        ),
+        'time_created': fields.DateTime(
+            missing=util.now_as_iso_string
+        ),
+        'game_id': fields.Int(missing=lambda: None, allow_none=True)
+
+    },
+    validate=_validate_challenge)
+    def post(self, challenger_name, challenged_name, time_created, game_id):
+        """Adds a new challenge.
+
+        Args:
+            challenger_name - name of the challener.
+            challenged_name - name of the challened.
+            time_created - when the challenge was created. Defaults to now.
+            game_id - the game that satisfies this challenge. Defaults to None.
+
+        Returns:
+            The created challenge's ID.
+
+        Side effects:
+            Adds a challenge to the database.
         """
+        challenger = _get_player_by_name(challenger_name)
+        challenged = _get_player_by_name(challenged_name)
 
+        challenge = Challenge(
+            challenger=challenger,
+            challenged=challenged,
+            time_created=time_created,
+            game_id=game_id
+        )
 
-api.add_resource(PlayerListResource, '/players')
-api.add_resource(PlayerResource, '/players/<string:name>')
-api.add_resource(GameListResource, '/games')
-api.add_resource(ChallengeListResource, '/challenges')
+        db.session.add(challenge)
+        db.session.commit()
+
+        return challenge.id, 201
 
 
 ################################################################################
 # Helpers
 ################################################################################
-def _build_parser(**arg_name_to_type):
-    """Build a RequestParser for the input arg types names and types."""
-    parser = reqparse.RequestParser()
-    for arg_name, type_ in arg_name_to_type.iteritems():
-        parser.add_argument(arg_name, type=type_, required=True)
-    return parser
-
-
-def _update_challenges_with_new_game(game):
-    winner_id = game.winner.id
-    loser_id = game.loser.id
-
-    challenge_query = _open_challenge_selector().where(
-        (Challenge.challenger==winner_id & Challenge.challenger==loser_id)
-        |
-        (Challenge.challenger==loser_id & Challenge.challenger==winner_id)
-    )
-
-    for challenge in challenge_query:
-        challenge.game = game
-        challenge.save()
-
-
-def _convert_game_model(model):
-    game = model_to_dict(model)
-    game['time_added'] = str(game['time_added'])
-    game['winner'] = game['winner']['name']
-    game['loser'] = game['loser']['name']
-    return game
-
-
-def _convert_player_model(player_model, rank=None):
-    """Take in a Player model and return a dict that can be sent over the wire.
-    """
-    player = model_to_dict(player_model)
-
-    # TODO: can I get properties to show up in models?
-    player['num_wins'] = player_model.num_wins
-    player['num_losses'] = player_model.num_losses
-
-    if rank is not None:
-        player['rank'] = rank
-    player['time_added'] = str(player['time_added'])
-    return player
-
-
-def _update_ratings(winner, loser, is_game_to_11):
-    """Update the rating field of the winner and loser.
-
-    Return a pair (new_winner_rating, new_loser_rating).
-    """
-    new_winner_rating, new_loser_rating = \
-        elo.elo_update(winner.rating, loser.rating, is_game_to_11)
-
-    winner.rating = new_winner_rating
-    winner.save()
-    loser.rating = new_loser_rating
-    loser.save()
-
-    return new_winner_rating, new_loser_rating
-
-
-def _inspect_scores(winner_score, loser_score):
-    """Make sure the score is a valid end-game score. Return True iff the
-    game was first to 11 (False if it was first to 21.
-
-    TODO:
-    * explain deuce scoring
-    * raise meaningful exceptions
-
-    """
-    if winner_score == 21:
-        assert 0 <= loser_score <= 20
-        return False
-    elif winner_score == 11:
-        assert 0 <= loser_score <= 10
-        return True
-    else:
-        assert False
-
-def _open_challenge_selector():
-    """Hepler method for returning `Challenge`s that are still open."""
-    return Challenge.select().where(Challenge.game >> None)
-
-
 def _get_player_by_name(player_name):
-    try:
-        return Player.select().where(Player.name==player_name).get()
-    except Exception as e: # TODO: why not a more specific exception?
-        return None
-
-@app.teardown_request
-def _db_close():
-    if not db.is_closed():
-        db.close()
-
-@app.before_request
-def _db_connect():
-    db.connect()
+    return Player.query.filter_by(name=player_name).first()
 
 
-if __name__ == '__main__':
-    app.run(debug=config['debug'], port=config['api_service_port'])
+@parser.error_handler
+def handle_request_parsing_error(err):
+    """webargs error handler that uses Flask-RESTful's abort function to return
+    a JSON error response to the client.
+    """
+    abort(422, errors=err.messages)

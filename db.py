@@ -1,5 +1,10 @@
-from peewee import Model, SqliteDatabase
+#from peewee import Model, SqliteDatabase
 
-from util import config
+#from util import config
 
-db = SqliteDatabase(config['db_file'])
+#db = SqliteDatabase(config['db_file'])
+
+#from flask_peewee.db import SqliteDatabase
+
+
+#db = SqliteDatabase()

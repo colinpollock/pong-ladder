@@ -1,89 +1,142 @@
+"""Models for a ping pong ladder.
 
-from peewee import Model
-from peewee import CharField, ForeignKeyField, DateTimeField, BooleanField, IntegerField
+Each person in the ladder is a `Player`. Each `Game` has two `Player`s, the
+winner and the loser. A `Challenge` is issued by one `Player` to another, and is
+open until a game between those two players has been played.
+"""
 
-from db import db
+
+from sqlalchemy import or_
+from sqlalchemy.ext.hybrid import hybrid_property, hybrid_method
+from flask.ext.sqlalchemy import SQLAlchemy
+from flask import url_for
 
 
-class Player(Model):
-    """TODO: docstring"""
-    # TODO: use the name as the PK?
-    name = CharField(max_length=30, unique=True, help_text="Player's username")
+db = SQLAlchemy()
 
-    rating = IntegerField(help_text='ELO rating')
-    time_added = DateTimeField()
 
-    class Meta:
-        database = db
+class Player(db.Model):
+    """Represents a ping pong player."""
 
-    @property
-    def won_games(self):
-        return self.won_games.all()
+    __tablename__ = 'player'
 
-    @property
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column('name', db.String(30), unique=True)
+    rating = db.Column('rating', db.Integer)
+    time_created = db.Column('time_created', db.DateTime)
+
+
+    @hybrid_property
+    def games(self):
+        return self.won_games + self.lost_games
+
+    @hybrid_property
     def num_wins(self):
-        return self.won_games.count()
+        return Game.query.filter(Game.winner==self).count()
 
-    @property
-    def lost_games(self):
-        return self.lost_games.all()
-
-    @property
+    @hybrid_property
     def num_losses(self):
-        return self.lost_games.count()
+        return Game.query.filter(Game.loser==self).count()
 
-    def __unicode__(self):
-        return 'Player(%s, %d, %s)' % (self.name, self.rating, self.time_added)
+    @hybrid_property
+    def num_games(self):
+        return self.num_wins + self.num_losses
+
+    @hybrid_property
+    def challenges(self):
+        return self.challenges_submitted + self.challenges_received
+
+    @hybrid_property
+    def num_challenges_submitted(self):
+        return Challenge.query.filter(Challenge.challenger==self).count()
+
+    @hybrid_property
+    def num_challenges_received(self):
+        return Challenge.query.filter(Challenge.challenged==self).count()
+
+    @hybrid_property
+    def num_challenges(self):
+        return self.num_challenges_received + self.num_challenges_submitted
+
+    def __repr__(self):
+        return 'Player(%s, %d, %s)' %  \
+            (self.name, self.rating, self.time_created)
 
 
-class Game(Model):
-    """TODO: docstring"""
-    winner = ForeignKeyField(Player, related_name='won_games')
-    loser = ForeignKeyField(Player, related_name='lost_games')
-    winner_score = IntegerField()
-    loser_score = IntegerField()
-    time_added = DateTimeField()
+class Game(db.Model):
+    """A game played between two ping pong players."""
 
-    @property
-    def time_added_str(self):
-        return str(self.time_added)
+    __tablename__ = 'game'
+    id = db.Column(db.Integer, primary_key=True)
 
-    class Meta:
-        database = db
+    winner_id = db.Column(db.Integer, db.ForeignKey('player.id'))
+    winner = db.relationship(
+        Player,
+        foreign_keys=[winner_id],
+        backref=db.backref('won_games')
+    )
 
-    def __unicode__(self):
+    loser_id = db.Column(db.Integer, db.ForeignKey('player.id'))
+    loser = db.relationship(
+        Player,
+        foreign_keys=[loser_id],
+        backref=db.backref('lost_games')
+    )
+
+    winner_score = db.Column('winner_score', db.Integer)
+    loser_score = db.Column('loser_score', db.Integer)
+
+    time_created = db.Column('time_created', db.DateTime)
+
+    def __repr__(self):
         return ('Game(%s beat %s %d-%d on %s)' % 
             (self.winner, self.loser, self.winner_score, self.loser_score,
-             self.time_added))
+             self.time_created))
 
 
-class Challenge(Model):
+class Challenge(db.Model):
     """A challenge issued by one player to another.
 
     Note that the `game` field references a Game if this challenge has been
     played and is None otherwise.
     """
-    challenger = ForeignKeyField(Player, related_name='challenges_submitted')
-    challenged = ForeignKeyField(Player, related_name='challenges_accepted')
 
-    game = ForeignKeyField(
-        Game,
-        null=True, 
-        help_text='References the completed game'
+    __tablename__ = 'challenge'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    challenger_id = db.Column(db.Integer, db.ForeignKey('player.id'))
+    challenger = db.relationship(
+        Player,
+        foreign_keys=[challenger_id],
+        backref=db.backref('challenges_submitted')
     )
-    time_added = DateTimeField()
 
-    class Meta:
-        database = db
+    challenged_id = db.Column(db.Integer, db.ForeignKey('player.id'))
+    challenged = db.relationship(
+        Player,
+        foreign_keys=[challenged_id],
+        backref=db.backref('challenges_received')
+    )
 
-    def __unicode__(self):
+    time_created = db.Column('time_created', db.DateTime)
+
+    game_id = db.Column(db.Integer, db.ForeignKey('game.id'))
+    game = db.relationship(Game, backref=db.backref('challenge', uselist=False))
+
+    def __repr__(self):
+        return '<Challenge(%s vs %s)>' %  \
+            (self.challenger.name, self.challenged.name)
+
+
         if self.is_completed:
             return 'Challenge completed: ', self.game
         else:
             return 'Challenge(%s vs %s issued on %s)' % \
-                (self.challenger.name, self.challenged.name, self.time_added)
+                (self.challenger.name, self.challenged.name, self.time_created)
 
-    @property
+    @hybrid_property
     def is_completed(self):
-        """TODO: docstring"""
+        """Return True iff a game has been played by these players after the
+        challenge."""
         return self.game is not None

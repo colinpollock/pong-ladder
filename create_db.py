@@ -1,6 +1,8 @@
+from models import db
+from app import create_app
 
-from db import db
+app = create_app()
 
-from models import Challenge, Game, Player
-
-db.create_tables([Challenge, Game, Player])
+context = app.app_context()
+context.push()
+db.create_all()
