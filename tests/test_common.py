@@ -1,6 +1,6 @@
 
-from app import create_app
-from models import db
+from app.app import create_app
+from app.models import db
 
 class BaseFlaskTest(object):
     @classmethod
