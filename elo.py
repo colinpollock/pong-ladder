@@ -14,8 +14,8 @@ def elo_update(winner_rating, loser_rating, to_11=True):
     """
     loser_ex = expectation(loser_rating, winner_rating)
     k = compute_k_value(to_11)
-    new_winner_rating = round(winner_rating + (k * loser_ex))
-    new_loser_rating = loser_rating - new_winner_rating + winner_rating
+    new_winner_rating = int(winner_rating + (k * loser_ex))
+    new_loser_rating = int(loser_rating - new_winner_rating + winner_rating)
     return (new_winner_rating, new_loser_rating)
     
 

@@ -9,6 +9,7 @@ open until a game between those two players has been played.
 from sqlalchemy import or_
 from sqlalchemy.ext.hybrid import hybrid_property, hybrid_method
 from flask.ext.sqlalchemy import SQLAlchemy
+from flask import url_for
 
 
 db = SQLAlchemy()
@@ -20,9 +21,10 @@ class Player(db.Model):
     __tablename__ = 'player'
 
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column('name', db.String(30))
+    name = db.Column('name', db.String(30), unique=True)
     rating = db.Column('rating', db.Integer)
     time_created = db.Column('time_created', db.DateTime)
+
 
     @hybrid_property
     def games(self):

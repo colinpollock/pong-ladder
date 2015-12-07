@@ -2,8 +2,7 @@
 COMMON: &common
   DEBUG: False
   TESTING: False
-  PORT: 4753
-  RATINGS:
+  RATINGS: &ratings
     STARTER_RATING: 1200
     K_VALUE_21: 15
     K_VALUE_11: 10
@@ -13,6 +12,8 @@ COMMON: &common
 DEVELOPMENT: &development
   <<: *common
   DEBUG: True
+  PORT: 4753
+  SQLALCHEMY_DATABASE_URI: 'sqlite:///dev.db'
 
 PRODUCTION: &production
   <<: *common
@@ -20,3 +21,6 @@ PRODUCTION: &production
 
 TESTING: &testing
   SQLALCHEMY_DATABASE_URI: 'sqlite://'
+  TESTING: True
+  RATINGS: *ratings
+  SQLALCHEMY_TRACK_MODIFICATIONS: True
