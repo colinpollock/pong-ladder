@@ -14,8 +14,10 @@ TODO
 
 
 # TODO #
-* Fix the package structure and
+* Fix the package structure and requirements
 * Cleanup
+  * Use marshmallow for deserializing POST bodies
+    * https://webargs.readthedocs.org/en/latest/advanced.html#advanced
   * Thread config values through (e.g. default initial rating)
 * Cosmetic
   * Order imports correctly

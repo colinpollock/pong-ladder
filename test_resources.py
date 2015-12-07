@@ -73,8 +73,8 @@ class BaseResourceTest(BaseFlaskTest):
     ):
         """Helper for posting a Game."""
         game = {
-            'winner_name': winner_name,
-            'loser_name': loser_name,
+            'winner': winner_name,
+            'loser': loser_name,
             'winner_score': winner_score,
             'loser_score': loser_score,
         }
@@ -375,8 +375,8 @@ class TestGameListResourcePost(BaseResourceTest):
         assert response.status_code == 422
 
         error_msgs = errors['errors']
-        assert error_msgs.keys() == ['loser_name']
-        assert error_msgs['loser_name'] == ['Player "kumanan" does not exist']
+        assert error_msgs.keys() == ['loser']
+        assert error_msgs['loser'] == ['Player "kumanan" does not exist']
 
     def test_validate_players_are_unique(self):
         kumanan = self.post_valid_player('kumanan')

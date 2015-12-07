@@ -59,7 +59,7 @@ def _validate_player_uniqueness(player1, player2):
 def _validate_game(game):
     # TODO: raise ALL exceptions rather than the first
     _validate_scores(game['winner_score'], game['loser_score'])
-    _validate_player_uniqueness(game['winner_name'], game['loser_name'])
+    _validate_player_uniqueness(game['winner'], game['loser'])
 
 def _validate_no_open_challenges(challenger_name, challenged_name):
     challenger = _get_player_by_name(challenger_name)
@@ -196,12 +196,12 @@ class GameListResource(Resource):
 
 
     @use_kwargs({
-        'winner_name': fields.Str(
+        'winner': fields.Str(
             required=True,
             validate=_validate_player_exists
-            # MEOW: use location=winner_name, but arg is winner
+
         ),
-        'loser_name': fields.Str(
+        'loser': fields.Str(
             required=True,
             validate=_validate_player_exists
         ),
@@ -214,8 +214,8 @@ class GameListResource(Resource):
     validate=_validate_game)
     def post(
         self,
-        winner_name,
-        loser_name,
+        winner,
+        loser,
         winner_score,
         loser_score,
         time_created
@@ -223,8 +223,8 @@ class GameListResource(Resource):
         """Add a new Game.
 
         Args:
-            winner_name: winner player's name.
-            loser_name: losing player's name.
+            winner: winner player's name.
+            loser: losing player's name.
             winner_score: winning player's score.
             loser_score: losing player's score.
             time_created: when the game was created. Defaults to NOW.
@@ -237,11 +237,10 @@ class GameListResource(Resource):
             Updates each player's rating in the database.
             Associates the new game with an existing challenge if appropriate.
         """
-        winner = _get_player_by_name(winner_name)
-        loser = _get_player_by_name(loser_name)
+        winner = _get_player_by_name(winner)
+        loser = _get_player_by_name(loser)
 
         is_game_to_11 = winner_score == 11
-
         new_winner_rating, new_loser_rating = \
             elo.elo_update(winner.rating, loser.rating, is_game_to_11)
 
