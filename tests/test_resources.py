@@ -1,28 +1,14 @@
-"""
+"""Tests for the resource layer."""
 
-* unit tests
-      
-  * challenge
-
-
-* integration tests
-  * post some players
-  * post some games
-  * post some challenges
-  * do gets and verify the output
-
-"""
 import datetime
 import simplejson as json
 
 import pytest
 
-from models import Challenge, Game, Player
-from test_common import BaseFlaskTest
-import util
-import elo
-
-from ipdb import set_trace
+from app.models import Challenge, Game, Player
+from app import util
+from app import elo
+from .test_common import BaseFlaskTest
 
 
 class BaseResourceTest(BaseFlaskTest):

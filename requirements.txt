@@ -1,0 +1,9 @@
+Flask-Environments==0.1
+Flask-RESTful==0.3.4
+Flask-SQLAlchemy==2.1
+Flask==0.10.1
+SQLAlchemy==1.0.9
+marshmallow==2.4.1
+pytest==2.8.4
+simplejson==3.8.1
+webargs==1.1.1

@@ -2,8 +2,8 @@
 
 from datetime import datetime
 
-from models import db, Player, Game, Challenge
-from app import create_app
+from app.models import db, Player, Game, Challenge
+from app.app import create_app
 
 from test_common import BaseFlaskTest
 

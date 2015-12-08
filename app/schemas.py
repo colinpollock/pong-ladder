@@ -3,8 +3,6 @@ from marshmallow import Schema, fields
 
 import util
 
-from ipdb import set_trace
-
 
 class _MyDateTime(fields.Field):
     def _serialize(self, value, attr, obj):

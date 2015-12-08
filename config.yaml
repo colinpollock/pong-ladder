@@ -12,12 +12,13 @@ COMMON: &common
 DEVELOPMENT: &development
   <<: *common
   DEBUG: True
-  PORT: 4753
-  SQLALCHEMY_DATABASE_URI: 'sqlite:///dev.db'
+  PORT: 6789
+  SQLALCHEMY_DATABASE_URI: 'sqlite:///../dev.db'
 
 PRODUCTION: &production
   <<: *common
-  SQLALCHEMY_DATABASE_URI: 'sqlite:///prod.db'
+  #PORT: NNNN
+  SQLALCHEMY_DATABASE_URI: 'sqlite:///../prod.db'
 
 TESTING: &testing
   SQLALCHEMY_DATABASE_URI: 'sqlite://'
