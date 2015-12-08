@@ -18,7 +18,6 @@ import util
 from models import Challenge, Game, Player
 from models import db
 
-from ipdb import set_trace #meow
 
 #TODO: get this from the config
 DEFAULT_INITIAL_RATING = 1200
