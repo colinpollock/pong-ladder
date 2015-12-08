@@ -110,8 +110,8 @@ class BaseResourceTest(BaseFlaskTest):
         game_id=None
     ):
         challenge = {
-            'challenger_name': challenger_name,
-            'challenged_name': challenged_name,
+            'challenger': challenger_name,
+            'challenged': challenged_name,
         }
 
         if time_created is not None:
@@ -552,9 +552,9 @@ class TestChallengeListResourcePost(BaseResourceTest):
         status_code, response_data = self.post_challenge('robert', 'colin')
         assert status_code == 422
         error_messages = response_data['errors']
-        assert error_messages.keys() == ['challenged_name']
+        assert error_messages.keys() == ['challenged']
         assert (
-            error_messages['challenged_name']
+            error_messages['challenged']
             ==
             ['Player "colin" does not exist']
         )
