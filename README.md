@@ -94,6 +94,7 @@ $ http get 'localhost:6789/challenges'
   * run pylint etc
 * Bot
   * Have the irc bot say "No X" when there are no players or games
+  * Send helpful message when service 500s
   * Handle challenges
 * Logging
   * log every message that includes pongbot
