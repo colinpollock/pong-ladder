@@ -85,7 +85,6 @@ $ http get 'localhost:6789/challenges'
 
 # TODO #
 * Cleanup
-  * Use challenger instead of challenger_name in posts
   * Use marshmallow for deserializing POST bodies
     * https://webargs.readthedocs.org/en/latest/advanced.html#advanced
   * Thread config values through (e.g. default initial rating)

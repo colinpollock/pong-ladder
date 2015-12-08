@@ -88,12 +88,12 @@ def _query_open_challenges_for_players(player1, player2):
 def _validate_challenge(challenge):
     # TODO: raise ALL exceptions rather than the first
     _validate_player_uniqueness(
-        challenge['challenger_name'],
-        challenge['challenged_name']
+        challenge['challenger'],
+        challenge['challenged']
     )
     _validate_no_open_challenges(
-        challenge['challenger_name'],
-        challenge['challenged_name']
+        challenge['challenger'],
+        challenge['challenged']
     )
 
 
@@ -292,11 +292,11 @@ class ChallengeListResource(Resource):
         return challenges, 200
 
     @use_kwargs({
-        'challenger_name': fields.Str(
+        'challenger': fields.Str(
             required=True,
             validate=_validate_player_exists
         ),
-        'challenged_name': fields.Str(
+        'challenged': fields.Str(
             required=True,
             validate=_validate_player_exists
         ),
@@ -307,12 +307,12 @@ class ChallengeListResource(Resource):
 
     },
     validate=_validate_challenge)
-    def post(self, challenger_name, challenged_name, time_created, game_id):
+    def post(self, challenger, challenged, time_created, game_id):
         """Adds a new challenge.
 
         Args:
-            challenger_name - name of the challener.
-            challenged_name - name of the challened.
+            challenger- name of the challener.
+            challenged- name of the challened.
             time_created - when the challenge was created. Defaults to now.
             game_id - the game that satisfies this challenge. Defaults to None.
 
@@ -322,8 +322,8 @@ class ChallengeListResource(Resource):
         Side effects:
             Adds a challenge to the database.
         """
-        challenger = _get_player_by_name(challenger_name)
-        challenged = _get_player_by_name(challenged_name)
+        challenger = _get_player_by_name(challenger)
+        challenged = _get_player_by_name(challenged)
 
         challenge = Challenge(
             challenger=challenger,
