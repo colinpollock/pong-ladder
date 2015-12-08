@@ -7,3 +7,8 @@ marshmallow==2.4.1
 pytest==2.8.4
 simplejson==3.8.1
 webargs==1.1.1
+
+# For IRC bot.
+Twisted==15.5.0
+pyOpenSSL
+requests==2.8.1
