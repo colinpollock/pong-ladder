@@ -1,10 +1,13 @@
 .PHONY: clean run-dev run-prod test
 
+# Note: pass PYTHON=XXX to override.
+PYTHON ?= python2.7
 
 default: venv
 
 venv:
-	virtualenv venv
+#	virtualenv --python python2.7 venv
+	virtualenv --python ${PYTHON} venv
 	venv/bin/pip install --requirement requirements.txt
 	venv/bin/python create_db.py
 
