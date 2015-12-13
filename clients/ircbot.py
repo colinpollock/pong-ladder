@@ -92,16 +92,16 @@ class LadderBot(irc.IRCClient):
         if not response.ok:
             return ['ERROR: contact the maintainer']
 
-        def _make_line(player):
+        def _make_line((rank, player)):
             return '[%d] %s %d-%d (%d)' % (
-                player['rank'],
+                rank,
                 player['name'].encode('ascii'),
                 player['num_wins'],
                 player['num_losses'],
                 player['rating']
             )
 
-        return map(_make_line, response.json())
+        return map(_make_line, enumerate(response.json(), start=1))
 
     def get_help(self):
         """Display help information about using the bot and available commands.
