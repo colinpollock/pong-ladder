@@ -14,6 +14,8 @@ class BaseResourceTest(BaseFlaskTest):
 
     This supports Flask app setup in the `setup_class` method and creation of
     the test client in the `setup` method.
+
+    It also has some helper methods for interacting with the API from the tests.
     """
 
     @classmethod
@@ -197,11 +199,10 @@ class TestPlayerListResourcePost(BaseResourceTest):
         assert error_messages['name'] == ['Missing data for required field.']
 
     def test_validate_rating(self):
-        player = {'name': 'colin', 'rating': -1}
-        response = self.client.post('/players', data=player)
-        assert response.status_code == 422
+        status_code, response_data = self.post_player('colin', -1)
+        assert status_code == 422
 
-        error_messages = json.loads(response.data)['errors']
+        error_messages = response_data['errors']
         assert error_messages.keys() == ['rating']
         assert error_messages['rating'] == ['Must be at least 1.']
 
@@ -223,15 +224,14 @@ class TestPlayerListResourcePost(BaseResourceTest):
         assert delta < max_delta
 
     def test_uniqueness_of_name(self):
-        self.client.post('/players', data={'name': 'kumanan'})
+        self.post_valid_player('kumanan')
         assert Player.query.count() == 1
         assert Player.query.get(1).name == 'kumanan'
 
-        response = self.client.post('/players', data={'name': 'kumanan'})
-
+        status_code, response_data = self.post_player('kumanan')
         assert Player.query.count() == 1
-        assert response.status_code == 422
-        error_messages = json.loads(response.data)['errors']
+        assert status_code == 422
+        error_messages = response_data['errors']
         assert error_messages.keys() == ['name']
         error_messages['name'] == 'Player "kumanan" already exists'
 
