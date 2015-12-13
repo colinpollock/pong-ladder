@@ -12,3 +12,4 @@ webargs==1.1.1
 Twisted==15.5.0
 pyOpenSSL
 requests==2.8.1
+service-identity==14.0.0
