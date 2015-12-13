@@ -3,8 +3,6 @@
 import datetime
 import simplejson as json
 
-import pytest
-
 from app.models import Challenge, Game, Player
 from app import util
 from app import elo
@@ -16,6 +14,8 @@ class BaseResourceTest(BaseFlaskTest):
 
     This supports Flask app setup in the `setup_class` method and creation of
     the test client in the `setup` method.
+
+    It also has some helper methods for interacting with the API from the tests.
     """
 
     @classmethod
@@ -37,7 +37,7 @@ class BaseResourceTest(BaseFlaskTest):
     def post_valid_player(self, name, rating=None, time_created=None):
         status_code, response_data = self.post_player(
             name,
-            rating, 
+            rating,
             time_created
         )
 
@@ -142,7 +142,7 @@ class BaseResourceTest(BaseFlaskTest):
         endpoint = '/challenges'
         if include_completed is not None:
             endpoint += '?include_completed=true'
-        
+
         response = self.client.get(endpoint)
         assert response.status_code == 200
         return json.loads(response.data)
@@ -199,40 +199,39 @@ class TestPlayerListResourcePost(BaseResourceTest):
         assert error_messages['name'] == ['Missing data for required field.']
 
     def test_validate_rating(self):
-        player = {'name': 'colin', 'rating': -1}
-        response = self.client.post('/players', data=player)
-        assert response.status_code == 422
+        status_code, response_data = self.post_player('colin', -1)
+        assert status_code == 422
 
-        error_messages = json.loads(response.data)['errors']
+        error_messages = response_data['errors']
         assert error_messages.keys() == ['rating']
         assert error_messages['rating'] == ['Must be at least 1.']
 
     def test_rating_defaults_to_default(self):
-        response = self.client.post('/players', data={'name': 'colin'})
+        self.post_valid_player('colin')
         assert Player.query.count() == 1
+
         # TODO: don't hardcode 1200
         assert Player.query.get(1).rating == 1200
 
     def test_time_defaults_to_now(self):
-        response = self.client.post('/players', data={'name': 'colin'})
+        self.post_valid_player('colin')
         assert Player.query.count() == 1
 
-        # TODO: this is brittle and should instead mock out the time creation in
-        # the resource, but I can't get the mock to work right now.
+        # TODO: this is brittle and should instead mock out the time creation
+        # in the resource, but I can't get the mock to work right now.
         delta = datetime.datetime.utcnow() - Player.query.get(1).time_created
         max_delta = datetime.timedelta(seconds=1)
         assert delta < max_delta
 
     def test_uniqueness_of_name(self):
-        self.client.post('/players', data={'name': 'kumanan'})
+        self.post_valid_player('kumanan')
         assert Player.query.count() == 1
         assert Player.query.get(1).name == 'kumanan'
 
-        response = self.client.post('/players', data={'name': 'kumanan'})
-
+        status_code, response_data = self.post_player('kumanan')
         assert Player.query.count() == 1
-        assert response.status_code == 422
-        error_messages = json.loads(response.data)['errors']
+        assert status_code == 422
+        error_messages = response_data['errors']
         assert error_messages.keys() == ['name']
         error_messages['name'] == 'Player "kumanan" already exists'
 
@@ -283,12 +282,11 @@ class TestPlayerListResourceGetOrdering(BaseResourceTest):
         names = [player['name'] for player in self.get_players()]
         assert names == ['colin', 'kumanan', 'robert']
 
-
     def test_tertiary_ordered_by_join_date(self):
         date = '2012-06-07T'
-        kumanan = self.post_player('kumanan', 1300, date + '15:37:44')
-        colin = self.post_player('colin', 1300, date + '14:03:12')
-        robert = self.post_player('robert', 1300, date + '16:17:11')
+        self.post_player('kumanan', 1300, date + '15:37:44')
+        self.post_player('colin', 1300, date + '14:03:12')
+        self.post_player('robert', 1300, date + '16:17:11')
         assert Player.query.count() == 3
 
         names = [player['name'] for player in self.get_players()]
@@ -346,6 +344,7 @@ class TestGameListResourcePost(BaseResourceTest):
         kumanan = self.post_valid_player('kumanan')
         colin = self.post_valid_player('colin')
         game_id = self.post_valid_game(kumanan, colin, 21, 19, datetime_str)
+        assert game_id == 1
 
         assert Game.query.count() == 1
         game = Game.query.get(1)
@@ -356,7 +355,7 @@ class TestGameListResourcePost(BaseResourceTest):
         assert game.time_created == util.parse_datetime(datetime_str)
 
     def test_validate_both_players_exist(self):
-        colin = self.post_valid_player('colin')
+        self.post_valid_player('colin')
         response, errors = self.post_game('colin', 'kumanan', 21, 19)
         assert response.status_code == 422
 
@@ -405,7 +404,6 @@ class TestGameListResourcePost(BaseResourceTest):
             )
             assert response.status_code == 201
 
-
     def test_time_defaults_to_now(self):
         colin = self.post_valid_player('colin')
         kumanan = self.post_valid_player('kumanan')
@@ -413,8 +411,8 @@ class TestGameListResourcePost(BaseResourceTest):
         self.post_valid_game(colin, kumanan, 11, 9)
         assert Game.query.count() == 1
 
-        # TODO: this is brittle and should instead mock out the time creation in
-        # the resource, but I can't get the mock to work right now.
+        # TODO: this is brittle and should instead mock out the time creation
+        # in the resource, but I can't get the mock to work right now.
         delta = datetime.datetime.utcnow() - Game.query.get(1).time_created
         max_delta = datetime.timedelta(seconds=1)
         assert delta < max_delta
@@ -461,22 +459,19 @@ class TestGameListResourcePost(BaseResourceTest):
 
 class TestGetGames(BaseResourceTest):
     def setup(self):
-        now_string = self.now_string = util.now_as_iso_string()
         colin = self.post_valid_player('colin')
         kumanan = self.post_valid_player('kumanan')
         robert = self.post_valid_player('robert')
         assert Player.query.count() == 3
 
         date = '2012-12-05T'
-        self.g1_time = date + '17:12:43' # second
-        self.g2_time = date + '16:47:03' # first
-        self.g3_time = date + '18:01:28' # third
+        self.g1_time = date + '17:12:43'  # second
+        self.g2_time = date + '16:47:03'  # first
+        self.g3_time = date + '18:01:28'  # third
 
-        gameid_1, gameid_2, gameid_3 = (
-            self.post_valid_game(kumanan, colin, 11, 8, self.g1_time),
-            self.post_valid_game(colin, kumanan, 21, 19, self.g2_time),
-            self.post_valid_game(robert, colin, 21, 10, self.g3_time)
-        )
+        self.post_valid_game(kumanan, colin, 11, 8, self.g1_time)
+        self.post_valid_game(colin, kumanan, 21, 19, self.g2_time)
+        self.post_valid_game(robert, colin, 21, 10, self.g3_time)
         assert Game.query.count() == 3
 
     def teardown(self):
@@ -546,7 +541,7 @@ class TestChallengeListResourcePost(BaseResourceTest):
         assert challenge.time_created == util.parse_datetime(time2)
 
     def test_validate_both_players_exist(self):
-        robert = self.post_valid_player('robert')
+        self.post_valid_player('robert')
         assert Player.query.count() == 1
 
         status_code, response_data = self.post_challenge('robert', 'colin')
@@ -560,7 +555,7 @@ class TestChallengeListResourcePost(BaseResourceTest):
         )
 
     def test_validate_players_are_unique(self):
-        colin = self.post_valid_player('colin')
+        self.post_valid_player('colin')
         status_code, errors = self.post_challenge('colin', 'colin')
 
         assert status_code == 422
@@ -572,30 +567,28 @@ class TestChallengeListResourcePost(BaseResourceTest):
         kumanan = self.post_valid_player('kumanan')
         assert Player.query.count() == 2
 
-        challenge_id = self.post_valid_challenge(colin, kumanan)
+        self.post_valid_challenge(colin, kumanan)
         assert Challenge.query.count() == 1
         time_created = Challenge.query.first().time_created
 
-        # TODO: this is brittle and should instead mock out the time creation in
-        # the resource, but I can't get the mock to work right now.
+        # TODO: this is brittle and should instead mock out the time creation
+        # in the resource, but I can't get the mock to work right now.
         delta = util.now() - time_created
         max_delta = datetime.timedelta(seconds=1)
         assert delta < max_delta
-
 
     def test_validate_no_existing_challenge_between_players(self):
         colin = self.post_valid_player('colin')
         kumanan = self.post_valid_player('robert')
         assert Player.query.count() == 2
 
-        challenge_id1 = self.post_valid_challenge(colin, kumanan)
+        self.post_valid_challenge(colin, kumanan)
         assert Challenge.query.count() == 1
 
         status_code, errors = self.post_challenge(colin, kumanan)
         assert status_code == 422
         assert errors['errors'][0] == \
             'There is an open challenge between the two players'
-
 
         status_code, errors = self.post_challenge(kumanan, colin)
         assert status_code == 422
@@ -625,9 +618,9 @@ class TestChallengeListResourceGet(BaseResourceTest):
         )
         assert Challenge.query.count() == 2
 
-        self.game_id =self.post_valid_game(
+        self.game_id = self.post_valid_game(
             'robert',
-            'colin', 
+            'colin',
             21,
             17,
             self.time_str

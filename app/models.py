@@ -1,15 +1,13 @@
 """Models for a ping pong ladder.
 
 Each person in the ladder is a `Player`. Each `Game` has two `Player`s, the
-winner and the loser. A `Challenge` is issued by one `Player` to another, and is
-open until a game between those two players has been played.
+winner and the loser. A `Challenge` is issued by one `Player` to another, and
+is open until a game between those two players has been played.
 """
 
 
-from sqlalchemy import or_
-from sqlalchemy.ext.hybrid import hybrid_property, hybrid_method
+from sqlalchemy.ext.hybrid import hybrid_property
 from flask.ext.sqlalchemy import SQLAlchemy
-from flask import url_for
 
 
 db = SQLAlchemy()
@@ -25,18 +23,17 @@ class Player(db.Model):
     rating = db.Column('rating', db.Integer)
     time_created = db.Column('time_created', db.DateTime)
 
-
     @hybrid_property
     def games(self):
         return self.won_games + self.lost_games
 
     @hybrid_property
     def num_wins(self):
-        return Game.query.filter(Game.winner==self).count()
+        return Game.query.filter(Game.winner == self).count()
 
     @hybrid_property
     def num_losses(self):
-        return Game.query.filter(Game.loser==self).count()
+        return Game.query.filter(Game.loser == self).count()
 
     @hybrid_property
     def num_games(self):
@@ -48,11 +45,11 @@ class Player(db.Model):
 
     @hybrid_property
     def num_challenges_submitted(self):
-        return Challenge.query.filter(Challenge.challenger==self).count()
+        return Challenge.query.filter(Challenge.challenger == self).count()
 
     @hybrid_property
     def num_challenges_received(self):
-        return Challenge.query.filter(Challenge.challenged==self).count()
+        return Challenge.query.filter(Challenge.challenged == self).count()
 
     @hybrid_property
     def num_challenges(self):
@@ -89,9 +86,9 @@ class Game(db.Model):
     time_created = db.Column('time_created', db.DateTime)
 
     def __repr__(self):
-        return ('Game(%s beat %s %d-%d on %s)' % 
-            (self.winner, self.loser, self.winner_score, self.loser_score,
-             self.time_created))
+        return ('Game(%s beat %s %d-%d on %s)' %
+                (self.winner, self.loser, self.winner_score, self.loser_score,
+                 self.time_created))
 
 
 class Challenge(db.Model):
@@ -122,18 +119,14 @@ class Challenge(db.Model):
     time_created = db.Column('time_created', db.DateTime)
 
     game_id = db.Column(db.Integer, db.ForeignKey('game.id'))
-    game = db.relationship(Game, backref=db.backref('challenge', uselist=False))
+    game = db.relationship(
+        Game,
+        backref=db.backref('challenge', uselist=False)
+    )
 
     def __repr__(self):
         return '<Challenge(%s vs %s)>' %  \
             (self.challenger.name, self.challenged.name)
-
-
-        if self.is_completed:
-            return 'Challenge completed: ', self.game
-        else:
-            return 'Challenge(%s vs %s issued on %s)' % \
-                (self.challenger.name, self.challenged.name, self.time_created)
 
     @hybrid_property
     def is_completed(self):

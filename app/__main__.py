@@ -1,16 +1,22 @@
+"""This is the entry point for running the ladder service API.
+
+The app will be configured to run in a particular environment, specified by the
+`FLASK_ENV` environment variable.
+"""
+
 import os
 
 from flask.ext.restful import Api
-from flask import Flask, jsonify, request, current_app
+from flask import Flask
 from flask_environments import Environments
 
-from resource import (PlayerListResource, PlayerResource, GameListResource,
-    ChallengeListResource)
-
 from models import db
+from resource import (PlayerListResource, PlayerResource, GameListResource,
+                      ChallengeListResource)
 
 
 def create_app():
+    """Return a Flask app configured for the correct env (test, dev, prod)."""
     app = Flask(__name__)
     env = Environments(app)
     env.from_yaml(os.path.join(os.getcwd(), 'config.yaml'))
@@ -24,6 +30,8 @@ def create_app():
     db.init_app(app)
 
     return app
+
+
 
 
 if __name__ == '__main__':

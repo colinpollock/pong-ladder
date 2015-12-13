@@ -9,10 +9,10 @@ venv:
 	venv/bin/python create_db.py
 
 run-dev: venv
-	FLASK_ENV=DEVELOPMENT venv/bin/python app/app.py
+	FLASK_ENV=DEVELOPMENT venv/bin/python -m app
 
 run-prod: venv
-	FLASK_ENV=PRODUCTION venv/bin/python app/app.py
+	FLASK_ENV=PRODUCTION venv/bin/python -m app
 
 test: venv
 	FLASK_ENV=TESTING venv/bin/py.test tests/test*

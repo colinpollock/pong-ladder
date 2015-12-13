@@ -2,6 +2,7 @@
 from app.app import create_app
 from app.models import db
 
+
 class BaseFlaskTest(object):
     @classmethod
     def setup_class(cls):
