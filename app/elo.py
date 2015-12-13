@@ -7,9 +7,15 @@ from __future__ import division
 
 
 def elo_update(winner_rating, loser_rating, to_11=True):
-    """Return the updated pair of ratings.
+    """Compute the new rating for the winner and loser.
 
-    meow: document args etc
+    Args:
+        winner_rating - the winner's rating.
+        loser_rating - the loser's rating.
+        to_11 - whether the game was played to 11 (or 21). The k value is higher
+            when the game is played to 21.
+    Returns:
+        a pair (new rating for winner, new rating for loser).
     """
     loser_ex = expectation(loser_rating, winner_rating)
     k = compute_k_value(to_11)
