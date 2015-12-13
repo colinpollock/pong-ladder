@@ -106,6 +106,7 @@ class BaseTestWithData(BaseFlaskTest):
         Game.query.delete()
         Challenge.query.delete()
 
+
 class TestPlayer(BaseTestWithData):
     def test_count(self):
         assert Player.query.count() == 4
@@ -115,7 +116,7 @@ class TestPlayer(BaseTestWithData):
 
     def test_get_player_by_name(self):
         assert (
-            set(Player.query.filter_by(name='kumanan').all()) == 
+            set(Player.query.filter_by(name='kumanan').all()) ==
             {self.kumanan}
         )
 
@@ -186,9 +187,9 @@ class TestChallenge(BaseTestWithData):
         assert self.challenge2.is_completed is False
 
 
-################################################################################
+###############################################################################
 # Helpers
-################################################################################
+###############################################################################
 def now():
     # TODO: use fixed times
     return datetime.now()

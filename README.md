@@ -91,11 +91,19 @@ $ http get 'localhost:6789/challenges'
 * Cosmetic
   * Order imports correctly
   * Write doc strings
-  * run pylint etc
+  * run pylint and flake8
+  * Remove db.py
+  * Grep for TODOs
+  * Find unused code
+  * Grep for meow
+  * Remove self.client.post/get
 * Bot
   * Have the irc bot say "No X" when there are no players or games
   * Send helpful message when service 500s
-  * Handle challenges
+  * Handle showing challenges
+  * Handle 'show my games'
+  * Have open challenges ping the challenged player periodically
+  * Get maintainer out of config for 'contact the maintainer'
 * Logging
   * log every message that includes pongbot
   * Log IRC connection errors

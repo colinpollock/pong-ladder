@@ -11,6 +11,7 @@ class _MyDateTime(fields.Field):
     def _deserialize(self, value):
         return util.parse_datetime(value)
 
+
 class PlayerSchema(Schema):
     name = fields.Str()
     rating = fields.Int()
@@ -31,6 +32,7 @@ class GameSchema(Schema):
     time_created = _MyDateTime()
 
 games_schema = GameSchema(many=True)
+
 
 class ChallengeSchema(Schema):
     id = fields.Int(dump_only=True)

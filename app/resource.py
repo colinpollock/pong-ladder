@@ -1,38 +1,77 @@
-""""""
-
-from datetime import datetime
-
 from flask.ext.restful import Resource, abort
-from flask.ext.restful.reqparse import RequestParser, Argument
 
 from sqlalchemy import and_, or_
-from sqlalchemy.exc import SQLAlchemyError
 from webargs import fields, validate, ValidationError
-from webargs.flaskparser import use_args, use_kwargs, parser
+from webargs.flaskparser import use_kwargs, parser
+
+import elo, schemas, util
+from models import Challenge, Game, Player, db
 
 
-
-import schemas
-import elo
-import util
-from models import Challenge, Game, Player
-from models import db
-
-
-#TODO: get this from the config
+# TODO: get this from the config
 DEFAULT_INITIAL_RATING = 1200
 
 
 def _validate_player_name_not_used(player_name):
     if _player_exists(player_name):
         raise ValidationError('Player "%s" already exists' % player_name)
-    
+
+
 def _validate_player_exists(player_name):
     if not _player_exists(player_name):
         raise ValidationError('Player "%s" does not exist' % player_name)
 
-def _player_exists(player_name):
-    return Player.query.filter_by(name=player_name).count() > 0
+
+def _validate_game(game):
+    # TODO: raise ALL exceptions rather than the first
+    _validate_scores(game['winner_score'], game['loser_score'])
+    _validate_player_uniqueness(game['winner'], game['loser'])
+
+
+def _query_open_challenges_for_players(player1, player2):
+    """Make a query that finds open challenges between the two players."""
+    player_filter = or_(
+        and_(
+            Challenge.challenger == player1,
+            Challenge.challenged == player2,
+        ),
+        and_(
+            Challenge.challenger == player2,
+            Challenge.challenged == player1,
+        )
+    )
+    open_filter = Challenge.game == None
+
+    return Challenge.query.filter(and_(open_filter, player_filter))
+
+
+def _validate_challenge(challenge):
+    # TODO: raise ALL exceptions rather than the first
+    _validate_player_uniqueness(
+        challenge['challenger'],
+        challenge['challenged']
+    )
+    _validate_no_open_challenges(
+        challenge['challenger'],
+        challenge['challenged']
+    )
+
+
+def _validate_no_open_challenges(challenger_name, challenged_name):
+    challenger = _get_player_by_name(challenger_name)
+    challenged = _get_player_by_name(challenged_name)
+
+    query = _query_open_challenges_for_players(challenger, challenged)
+    if query.count() > 0:
+        message = 'There is an open challenge between the two players'
+        raise ValidationError(message)
+
+
+def _validate_player_uniqueness(player1, player2):
+    if player1 == player2:
+        message = 'Two players must be unique, but both are "%s"' % player1
+        raise ValidationError(message)
+
 
 def _validate_scores(winner_score, loser_score):
     error = ValidationError('Invalid score: winner score must be 21 or 11 '
@@ -50,62 +89,16 @@ def _validate_scores(winner_score, loser_score):
     else:
         raise error
 
-def _validate_player_uniqueness(player1, player2):
-    if player1 == player2:
-        message = 'Two players must be unique, but both are "%s"' % player1
-        raise ValidationError(message)
-
-def _validate_game(game):
-    # TODO: raise ALL exceptions rather than the first
-    _validate_scores(game['winner_score'], game['loser_score'])
-    _validate_player_uniqueness(game['winner'], game['loser'])
-
-def _validate_no_open_challenges(challenger_name, challenged_name):
-    challenger = _get_player_by_name(challenger_name)
-    challenged = _get_player_by_name(challenged_name)
-
-    query = _query_open_challenges_for_players(challenger, challenged)
-    if query.count() > 0:
-        message = 'There is an open challenge between the two players'
-        raise ValidationError(message)
-
-def _query_open_challenges_for_players(player1, player2):
-    """Make a query that finds open challenges between the two players."""
-    player_filter = or_(
-        and_(
-            Challenge.challenger==player1,
-            Challenge.challenged==player2,
-        ),
-        and_(
-            Challenge.challenger==player2,
-            Challenge.challenged==player1,
-        )
-    )
-    open_filter = Challenge.game == None
-
-    return Challenge.query.filter(and_(open_filter, player_filter))
-
-def _validate_challenge(challenge):
-    # TODO: raise ALL exceptions rather than the first
-    _validate_player_uniqueness(
-        challenge['challenger'],
-        challenge['challenged']
-    )
-    _validate_no_open_challenges(
-        challenge['challenger'],
-        challenge['challenged']
-    )
-
 
 class PlayerListResource(Resource):
-
     def get(self):
         """Return all of the Players.
 
-        The players are ordered by:
-        1) Rating descending.
-        2) Number of games played descending.
-        3) Join date ascending.
+        Returns:
+            A list of player object, ordered by:
+              1) Rating descending.
+              2) Number of games played descending.
+              3) Join date ascending.
         """
         query = Player.query.all()
         marshalled = schemas.players_schema.dump(query)
@@ -115,7 +108,7 @@ class PlayerListResource(Resource):
 
         players = sorted(
             marshalled.data,
-            key = lambda player: (
+            key=lambda player: (
                 -player['rating'],
                 -(player['num_wins'] + player['num_losses']),
                 util.parse_datetime(player['time_created'])
@@ -135,7 +128,7 @@ class PlayerListResource(Resource):
         ),
         'time_created': fields.DateTime(
             missing=util.now_as_iso_string
-         )
+        )
     })
     def post(self, name, rating, time_created):
         """Add a new Player.
@@ -164,10 +157,7 @@ class PlayerListResource(Resource):
 
 
 class PlayerResource(Resource):
-    """TODO: docstring
-
-    # Note: no deletions or puts (updates)
-    """
+    """For GETting specific players."""
 
     def get(self, name):
         """Return the player with the specified name."""
@@ -185,6 +175,14 @@ class GameListResource(Resource):
 
     @use_kwargs({'count': fields.Int(missing=10)})
     def get(self, count):
+        """Return the most recent `count` games.
+
+        Args:
+            count - the maximum number of games to return.
+
+        Returns:
+            A list of game objects.
+        """
         query = Game.query.order_by(Game.time_created.desc()).limit(count)
         marshalled = schemas.games_schema.dump(query)
 
@@ -192,7 +190,6 @@ class GameListResource(Resource):
             return marshalled.errors, 500
         else:
             return marshalled.data, 200
-
 
     @use_kwargs({
         'winner': fields.Str(
@@ -208,9 +205,10 @@ class GameListResource(Resource):
         'loser_score': fields.Int(required=True),
         'time_created': fields.DateTime(
             missing=util.now_as_iso_string
-         )
+        )
     },
-    validate=_validate_game)
+        validate=_validate_game
+    )
     def post(
         self,
         winner,
@@ -267,16 +265,18 @@ class GameListResource(Resource):
 
         return game.id, 201
 
-class ChallengeListResource(Resource):
 
+class ChallengeListResource(Resource):
     @use_kwargs({'include_completed': fields.Bool(missing=False)})
     def get(self, include_completed):
-        """Return all open challenges.
-        
-        Challenges are ordered oldest to newest.
+        """Return challenges.
 
-        TODO: allow for challenges for a particular person to power "show me
-        my challenges".
+        Args:
+            include_completed - iff True, challenges that have been completed
+                will be shown. Defaults to False.
+
+        Returns:
+            A list of challenge objects, ordered by recency.
         """
 
         if include_completed:
@@ -306,7 +306,8 @@ class ChallengeListResource(Resource):
         'game_id': fields.Int(missing=lambda: None, allow_none=True)
 
     },
-    validate=_validate_challenge)
+        validate=_validate_challenge
+    )
     def post(self, challenger, challenged, time_created, game_id):
         """Adds a new challenge.
 
@@ -338,9 +339,9 @@ class ChallengeListResource(Resource):
         return challenge.id, 201
 
 
-################################################################################
+###############################################################################
 # Helpers
-################################################################################
+###############################################################################
 def _get_player_by_name(player_name):
     return Player.query.filter_by(name=player_name).first()
 
@@ -351,3 +352,7 @@ def handle_request_parsing_error(err):
     a JSON error response to the client.
     """
     abort(422, errors=err.messages)
+
+
+def _player_exists(player_name):
+    return Player.query.filter_by(name=player_name).count() > 0

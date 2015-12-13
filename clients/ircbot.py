@@ -11,7 +11,6 @@ import argparse
 import re
 import sys
 import simplejson as json
-from sys import stderr
 
 import requests
 from twisted.words.protocols import irc
@@ -19,11 +18,10 @@ from twisted.internet import protocol, reactor, ssl
 
 
 class LadderBot(irc.IRCClient):
-    """A bot that connects to an IRC channel to manage a ping pong ladder.
-    """
+    """A bot that connects to an IRC channel to manage a ping pong ladder."""
 
     def process_command(self, command):
-        """Identify the command, talk to ladder service, and return a list of 
+        """Identify the command, talk to ladder service, and return a list of
         messages to be sent back to the channel.
         """
         _log_info('COMMAND: %s' % command)
@@ -44,24 +42,21 @@ class LadderBot(irc.IRCClient):
             (?P<loser_score>\d+)
         """, re.VERBOSE)
 
-        # TODO: handle challenges (all open, my open)
-        # TODO: handle 'show my games'
-
         if help_pat.match(command):
             return self.get_help()
 
         if ladder_pat.match(command):
             return self.get_ladder()
 
-        m = player_pat.match(command)
-        if m:
-            return self.add_player(m.groupdict()['name'])
-        
-        m = game_pat.match(command)
-        if m:
-            data = m.groupdict()
+        match_ = player_pat.match(command)
+        if match_:
+            return self.add_player(match_.groupdict()['name'])
+
+        match_ = game_pat.match(command)
+        if match_:
+            data = match_.groupdict()
             return self.add_game(data['winner'], data['loser'],
-                                 data['winner_score'], 
+                                 data['winner_score'],
                                  data['loser_score'])
 
         return ['Command not recognized! Type "pongbot help" for more info.']
@@ -71,12 +66,9 @@ class LadderBot(irc.IRCClient):
 
         response = self._post('/players', {'name': player_name})
         if response.ok:
-            # TODO: send  initial rating back
             return ['Added player "%s"' % player_name]
         else:
-            #TODO: pass the exception message through
             return ['Failed to add player "%s"' % player_name]
-
 
     def add_game(self, winner, loser, winner_score, loser_score):
         """Add a new game."""
@@ -90,19 +82,15 @@ class LadderBot(irc.IRCClient):
 
         response = self._post('/games', data)
         if response.ok:
-            # TODO: send the point differences back
             return ['Added game']
         else:
-            # TODO: pass the exception message through
             return ['Failed to add game']
 
     def get_ladder(self):
         """Return the players ordered by rating."""
         response = self._get('/players')
         if not response.ok:
-            # TODO: log this, and handle error better
-            return ['ERROR: contact cpollock']
-            # TODO: get maintainer out of config
+            return ['ERROR: contact the maintainer']
 
         def _make_line(player):
             return '[%d] %s %d-%d (%d)' % (
@@ -119,16 +107,15 @@ class LadderBot(irc.IRCClient):
         """Display help information about using the bot and available commands.
         """
         return [
-          'Type "%s: COMMAND". Commands are:' % self.nickname,
-          'Add a player: add player PLAYER_NAME',
-          'Add a game: WINNER_NAME beat LOSER_NAME WINNER_SCORE to LOSER_SCORE',
-          'Show all players ordered by rating: ladder'
+            'Type "%s: COMMAND". Commands are:' % self.nickname,
+            'Add a player: add player PLAYER_NAME',
+            'Add a game: WINNER_NAME beat LOSER_NAME WINNER_SCORE-LOSER_SCORE',
+            'Show all players ordered by rating: ladder'
         ]
 
-
-    ############################################################################
+    ###########################################################################
     # Helpers
-    ############################################################################
+    ###########################################################################
     @property
     def nickname(self):
         return self.factory.nickname
@@ -150,8 +137,8 @@ class LadderBot(irc.IRCClient):
 
     def privmsg(self, user, channel, message):
         """Respond to a message in the channel if the bot is mentioned."""
-        _log_info('privMsg from %s in channel %s: "%s"' % \
-            (user, channel, message))
+        _log_info('privMsg from %s in channel %s: "%s"' %
+                  (user, channel, message))
         pat = re.compile(r"""
             \s*
             (?P<nick>%s|%s)
@@ -173,15 +160,15 @@ class LadderBot(irc.IRCClient):
     def _post(self, endpoint, data):
         """Post JSON data to the service.
 
-        Note that this is just a pass-through and that no exceptions are handled
-        here.
+        Note that this is just a pass-through and that no exceptions are
+        handled here.
         """
         return requests.post(
             self._api_url + endpoint,
             data=json.dumps(data),
             headers={'Content-Type': 'application/json'}
         )
-        
+
     def _get(self, endpoint):
         """Make a GET request to the specified endpoint and return response."""
         return requests.get(self._api_url + endpoint)
@@ -196,21 +183,20 @@ class LadderBotFactory(protocol.ClientFactory):
 
         self.api_url = 'http://%s:%d' % (service_host, service_port)
 
-
     def clientConnectionLost(self, connector, reason):
         _log_error('lost connection (%s), reconnecting' % reason)
-
 
     def clientConnectionFailed(self, connector, reason):
         _log_error('could not connect: %s' % reason)
 
 
-# TODO: standard logging
 def _log_info(message):
     print >> sys.stderr, 'INFO:', message
 
+
 def _log_error(message):
     print >> sys.stderr, 'ERROR:', message
+
 
 def main(args):
     bot_factory = LadderBotFactory(
@@ -249,7 +235,6 @@ if __name__ == '__main__':
         help='IRC channel. E.g. "#pingpong".'
     )
     parser.add_argument('--bot-name', required=True)
-
     parser.add_argument('--service-host', required=True)
     parser.add_argument('--service-port', type=int, required=True)
 
