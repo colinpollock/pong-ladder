@@ -1,6 +1,5 @@
 # TODO #
 * Bot
-  * Fix the SSL connection.
   * Have error messages indicate who the maintainer is.
   * Have the irc bot say "No X" when there are no players or games
   * Send helpful message when service 500s
