@@ -1,8 +1,6 @@
 # TODO #
 * Bot
-  * Have error messages indicate who the maintainer is.
   * Have the irc bot say "No X" when there are no players or games
-  * Send helpful message when service 500s
   * Handle showing challenges
   * Handle 'show my games'
   * Have open challenges ping the challenged player periodically

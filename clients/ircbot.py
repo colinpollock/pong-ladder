@@ -8,6 +8,7 @@ Commands:
 """
 
 import argparse
+import functools
 import re
 import sys
 import simplejson as json
@@ -15,6 +16,24 @@ import simplejson as json
 import requests
 from twisted.words.protocols import irc
 from twisted.internet import protocol, reactor, ssl
+
+
+def handles_service_errors(func):
+    """Decorator that will return a error message when the service errors.
+
+    This is meant to annotate any method that (a) has a call to the service and
+    (b) returns strings that are send to channel.
+
+    This decorator will only work for methods within `LadderBot`.
+    """
+    @functools.wraps(func)
+    def wrapper(self, *args, **kwargs):
+        try:
+            return func(self, *args, **kwargs)
+        except requests.exceptions.RequestException:
+            return self._make_service_error_message()
+
+    return wrapper
 
 
 class LadderBot(irc.IRCClient):
@@ -61,15 +80,16 @@ class LadderBot(irc.IRCClient):
 
         return ['Command not recognized! Type "pongbot help" for more info.']
 
+    @handles_service_errors
     def add_player(self, player_name):
         """Add a new player"""
-
         response = self._post('/players', {'name': player_name})
-        if response.ok:
-            return ['Added player "%s"' % player_name]
-        else:
-            return ['Failed to add player "%s"' % player_name]
+        return self._make_message(
+            response,
+            lambda: ['Added player {0}'.format(player_name)]
+        )
 
+    @handles_service_errors
     def add_game(self, winner, loser, winner_score, loser_score):
         """Add a new game."""
 
@@ -81,16 +101,15 @@ class LadderBot(irc.IRCClient):
         }
 
         response = self._post('/games', data)
-        if response.ok:
-            return ['Added game']
-        else:
-            return ['Failed to add game']
+        return self._make_message(response, lambda: ['Added game'])
 
+    @handles_service_errors
     def get_ladder(self):
         """Return the players ordered by rating."""
         response = self._get('/players')
+
         if not response.ok:
-            return ['ERROR: contact the maintainer']
+            return [self._error_message()]
 
         def _make_line((rank, player)):
             return '[%d] %s %d-%d (%d)' % (
@@ -101,7 +120,10 @@ class LadderBot(irc.IRCClient):
                 player['rating']
             )
 
-        return map(_make_line, enumerate(response.json(), start=1))
+        return self._make_message(
+            response,
+            lambda: map(_make_line, enumerate(response.json(), start=1))
+        )
 
     def get_help(self):
         """Display help information about using the bot and available commands.
@@ -116,6 +138,10 @@ class LadderBot(irc.IRCClient):
     ###########################################################################
     # Helpers
     ###########################################################################
+    @property
+    def maintainer_name(self):
+        return self.factory.maintainer_name
+
     @property
     def nickname(self):
         return self.factory.nickname
@@ -177,6 +203,36 @@ class LadderBot(irc.IRCClient):
         """Make a GET request to the specified endpoint and return response."""
         return requests.get(self._api_url + endpoint)
 
+    def _make_service_error_message(self):
+        return [
+            'Error: contact the maintainer {0}'.format(
+                self.maintainer_name
+            )
+        ]
+
+    def _make_message(self, http_response, build_success_messages):
+        """Make a response message to send to the IRC channel.
+
+        Args:
+            http_response - the response sent from the ladder service.
+            build_success_messages - if the HTTP request sent to the ladder
+                service was succesful then this function is called. The
+                function generates a list of strings to be sent by the IRC bot
+                back to the channel. Note that this is a function rather than
+                just the actual message string(s) because building the message
+                may require the http request to have been successful and that's
+                not checked until this method.
+
+        Returns:
+            A list of strings to be sent to the IRC channel.
+        """
+        if http_response.ok:
+            return build_success_messages()
+        elif http_response.status_code == 500:
+            return self._make_service_error_message()
+        else:
+            return ['Error: {0}'.format(str(http_response.json()))]
+
 
 class LadderBotFactory(protocol.ClientFactory):
     protocol = LadderBot
@@ -187,11 +243,13 @@ class LadderBotFactory(protocol.ClientFactory):
         nickname,
         service_host,
         service_port,
-        server_password
+        server_password,
+        maintainer_name
     ):
         self.channel = channel
         self.nickname = nickname
         self.server_password = server_password
+        self.maintainer_name = maintainer_name
 
         self.api_url = 'http://%s:%d' % (service_host, service_port)
 
@@ -217,6 +275,7 @@ def main(args):
         args.service_host,
         args.service_port,
         args.server_password,
+        args.maintainer_name
     )
 
     if args.use_ssl:
@@ -253,5 +312,7 @@ if __name__ == '__main__':
     parser.add_argument('--bot-name', required=True)
     parser.add_argument('--service-host', required=True)
     parser.add_argument('--service-port', type=int, required=True)
+
+    parser.add_argument('--maintainer-name', default='<UNKNOWN>')
 
     main(parser.parse_args(sys.argv[1:]))
