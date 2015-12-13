@@ -121,6 +121,10 @@ class LadderBot(irc.IRCClient):
         return self.factory.nickname
 
     @property
+    def password(self):
+        return self.factory.server_password
+
+    @property
     def _api_url(self):
         return self.factory.api_url
 
@@ -177,9 +181,17 @@ class LadderBot(irc.IRCClient):
 class LadderBotFactory(protocol.ClientFactory):
     protocol = LadderBot
 
-    def __init__(self, channel, nickname, service_host, service_port):
+    def __init__(
+        self,
+        channel,
+        nickname,
+        service_host,
+        service_port,
+        server_password
+    ):
         self.channel = channel
         self.nickname = nickname
+        self.server_password = server_password
 
         self.api_url = 'http://%s:%d' % (service_host, service_port)
 
@@ -204,6 +216,7 @@ def main(args):
         args.bot_name,
         args.service_host,
         args.service_port,
+        args.server_password,
     )
 
     if args.use_ssl:
@@ -228,7 +241,10 @@ if __name__ == '__main__':
 
     parser.add_argument('--irc-host', required=True)
     parser.add_argument('--irc-port', type=int, required=True)
+
     parser.add_argument('--use-ssl', action='store_true', default=False)
+    parser.add_argument('--server-password', required=False)
+
     parser.add_argument(
         '--channel',
         required=True,
