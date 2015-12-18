@@ -341,8 +341,8 @@ class TestGameListResourcePost(BaseResourceTest):
 
     def test_db_is_updated(self):
         datetime_str = '2012-11-02T14:22:07'
-        kumanan = self.post_valid_player('kumanan')
-        colin = self.post_valid_player('colin')
+        kumanan = self.post_valid_player('kumanan', rating=1000)
+        colin = self.post_valid_player('colin', rating=1200)
         game_id = self.post_valid_game(kumanan, colin, 21, 19, datetime_str)
         assert game_id == 1
 
@@ -434,8 +434,8 @@ class TestGameListResourcePost(BaseResourceTest):
         assert kumanan.rating == new_loser_rating
 
     def test_new_game_updates_existing_challenge(self):
-        kumanan = self.post_valid_player('kumanan')
-        michelle = self.post_valid_player('michelle')
+        kumanan = self.post_valid_player('kumanan', rating=1350)
+        michelle = self.post_valid_player('michelle', rating=1250)
         assert Player.query.count() == 2
 
         self.post_game(kumanan, michelle, 21, 13)
@@ -527,7 +527,7 @@ class TestChallengeListResourcePost(BaseResourceTest):
         time1 = '2014-12-07T02:36:34'
         time2 = '2015-12-07T02:36:34'
         robert = self.post_valid_player('robert', time_created=time1)
-        colin = self.post_valid_player('colin', time_created=time1)
+        colin = self.post_valid_player('colin', rating=1300, time_created=time1)
 
         challenge_id = \
             self.post_valid_challenge(robert, colin, time_created=time2)
@@ -562,9 +562,19 @@ class TestChallengeListResourcePost(BaseResourceTest):
         assert errors['errors'][0] == \
             'Two players must be unique, but both are "colin"'
 
+    def test_validate_challenger_has_lower_rating(self):
+        colin = self.post_valid_player('colin', rating=1200)
+        kumanan = self.post_valid_player('kumanan', rating=1300)
+        assert Player.query.count() == 2
+
+        status_code, errors = self.post_challenge(kumanan, colin)
+        assert status_code == 422
+        assert errors['errors'][0] == \
+            'The challenger must have a lower rating than the challenged'
+
     def test_time_defaults_to_now(self):
-        colin = self.post_valid_player('colin')
-        kumanan = self.post_valid_player('kumanan')
+        colin = self.post_valid_player('colin', rating=1100)
+        kumanan = self.post_valid_player('kumanan', rating=1300)
         assert Player.query.count() == 2
 
         self.post_valid_challenge(colin, kumanan)
@@ -578,8 +588,8 @@ class TestChallengeListResourcePost(BaseResourceTest):
         assert delta < max_delta
 
     def test_validate_no_existing_challenge_between_players(self):
-        colin = self.post_valid_player('colin')
-        kumanan = self.post_valid_player('robert')
+        colin = self.post_valid_player('colin', rating=1100)
+        kumanan = self.post_valid_player('kumanan', rating=1200)
         assert Player.query.count() == 2
 
         self.post_valid_challenge(colin, kumanan)
@@ -599,7 +609,7 @@ class TestChallengeListResourcePost(BaseResourceTest):
 class TestChallengeListResourceGet(BaseResourceTest):
     def setup(self):
         self.time_str = '2011-03-02T06:05:47'
-        self.post_valid_player('colin', time_created=self.time_str)
+        self.post_valid_player('colin', 1100, time_created=self.time_str)
         self.post_valid_player('kumanan', time_created=self.time_str)
         self.post_valid_player('robert', time_created=self.time_str)
         self.post_valid_player('michelle', time_created=self.time_str)
