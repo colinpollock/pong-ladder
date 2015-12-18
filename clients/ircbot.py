@@ -5,6 +5,8 @@ Commands:
 * ```add player PLAYER```: add a new player
 * ```PLAYER1 beat PLAYER2 SCORE1 to SCORE2```: add a new game
 * ```ladder```: display all players ordered by their ratings
+* ```PLAYER1 challenges PLAYER2''': add a new challenge
+* ```challenges```: show all open challenges
 """
 
 import argparse
@@ -22,7 +24,7 @@ def handles_service_errors(func):
     """Decorator that will return a error message when the service errors.
 
     This is meant to annotate any method that (a) has a call to the service and
-    (b) returns strings that are send to channel.
+    (b) returns strings that are sent to channel.
 
     This decorator will only work for methods within `LadderBot`.
     """
@@ -60,6 +62,14 @@ class LadderBot(irc.IRCClient):
             \s*
             (?P<loser_score>\d+)
         """, re.VERBOSE)
+        add_challenge_pat = re.compile(r"""
+            (?P<challenger>\w+)
+            \s+
+            challenges
+            \s+
+            (?P<challenged>\w+)
+        """, re.VERBOSE)
+        show_challenge_pat = re.compile(r'challenges|show challenges')
 
         if help_pat.match(command):
             return self.get_help()
@@ -77,6 +87,15 @@ class LadderBot(irc.IRCClient):
             return self.add_game(data['winner'], data['loser'],
                                  data['winner_score'],
                                  data['loser_score'])
+
+        match_ = add_challenge_pat.match(command)
+        if match_:
+            data = match_.groupdict()
+            return self.add_challenge(data['challenger'], data['challenged'])
+
+        match_ = show_challenge_pat.match(command)
+        if match_:
+            return self.get_challenges()
 
         return ['Command not recognized! Type "pongbot help" for more info.']
 
@@ -102,6 +121,35 @@ class LadderBot(irc.IRCClient):
 
         response = self._post('/games', data)
         return self._make_message(response, lambda: ['Added game'])
+
+    @handles_service_errors
+    def add_challenge(self, challenger, challenged):
+        data = {
+            'challenger': challenger,
+            'challenged': challenged
+        }
+
+        response = self._post('/challenges', data)
+        return self._make_message(response, lambda: ['Added challenge'])
+
+    @handles_service_errors
+    def get_challenges(self):
+        """Return the open challenges."""
+        response = self._get('/challenges')
+        if not response.ok:
+            return [self._error_message()]
+
+        def _make_line((idx, challenge)):
+            return '[%d] %s challenged %s' % (
+                idx,
+                challenge['challenger'].encode('utf-8'),
+                challenge['challenged'].encode('utf-8')
+            )
+
+        return self._make_message(
+            response,
+            lambda: map(_make_line, enumerate(response.json(), start=1))
+        )
 
     @handles_service_errors
     def get_ladder(self):
