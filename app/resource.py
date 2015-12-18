@@ -55,6 +55,10 @@ def _validate_challenge(challenge):
         challenge['challenger'],
         challenge['challenged']
     )
+    _validate_challenger_has_lower_rating(
+        challenge['challenger'],
+        challenge['challenged']
+    )
 
 
 def _validate_no_open_challenges(challenger_name, challenged_name):
@@ -64,6 +68,14 @@ def _validate_no_open_challenges(challenger_name, challenged_name):
     query = _query_open_challenges_for_players(challenger, challenged)
     if query.count() > 0:
         message = 'There is an open challenge between the two players'
+        raise ValidationError(message)
+
+def _validate_challenger_has_lower_rating(challenger_name, challenged_name):
+    challenger = _get_player_by_name(challenger_name)
+    challenged = _get_player_by_name(challenged_name)
+
+    if challenger.rating >= challenged.rating:
+        message = 'The challenger must have a lower rating than the challenged'
         raise ValidationError(message)
 
 
